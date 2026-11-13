@@ -23,7 +23,7 @@ open Set
 
 namespace MeasureTheory
 
-variable {α E : Type*} [TopologicalSpace α] [RegularSpace α] [LocallyCompactSpace α]
+variable {α E : Type*} [TopologicalSpace α] [WeaklyLocallyCompactSpace α] [R1Space α]
   [MeasurableSpace α] [BorelSpace α] [NormedAddCommGroup E] [NormedSpace ℝ E] {μ : Measure α}
   {p : ℝ≥0∞}
 
