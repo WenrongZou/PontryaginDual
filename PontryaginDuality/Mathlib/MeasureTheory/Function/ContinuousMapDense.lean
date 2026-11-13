@@ -74,7 +74,7 @@ theorem MemLp.exists_hasCompactSupport_eLpNorm_sub_le' [μ.Regular] (hp : p ≠ 
 theorem Lp.dense_hasCompactSupport_continuous [μ.Regular] [Fact (1 ≤ p)] (hp : p ≠ ∞) :
     Dense {f : Lp E p μ | ∃ g : α → E, f =ᵐ[μ] g ∧ HasCompactSupport g ∧ Continuous g} := by
   intro f
-  refine (mem_closure_iff_nhds_basis Metric.nhds_basis_closedBall).2 fun ε hε ↦ ?_
+  refine (mem_closure_iff_nhds_basis Metric.nhds_basis_closedBall).mpr fun ε hε ↦ ?_
   obtain ⟨g, hg₁, hg₂, hg₃, hg₄⟩ := (Lp.memLp f).exists_hasCompactSupport_eLpNorm_sub_le' hp
     (ε := ENNReal.ofReal ε) (by positivity)
   refine ⟨hg₄.toLp g, ⟨g, hg₄.coeFn_toLp, hg₁, hg₃⟩, ?_⟩

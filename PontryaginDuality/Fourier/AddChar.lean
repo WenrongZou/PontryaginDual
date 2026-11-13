@@ -65,6 +65,16 @@ theorem toAddChar_injective :
 theorem toAddChar_inj {χ η : AddPontryaginDual A} : χ.toAddChar = η.toAddChar ↔ χ = η :=
   toAddChar_injective.eq_iff
 
+/-- The element of the additive Pontryagin dual of `A` associated with a continuous additive
+character `A → Circle`. -/
+noncomputable def ofAddChar (ψ : AddChar A Circle) (hψ : Continuous ψ) : AddPontryaginDual A :=
+  (⟨AddChar.toAddMonoidHomEquiv ψ, continuous_ofMul.comp hψ⟩ : A →ₜ+ AdditiveCircle)
+
+@[simp]
+theorem toAddChar_ofAddChar (ψ : AddChar A Circle) (hψ : Continuous ψ) :
+    (ofAddChar ψ hψ).toAddChar = ψ :=
+  rfl
+
 @[simp]
 theorem toAddChar_zero_apply (a : A) : (0 : AddPontryaginDual A).toAddChar a = 1 :=
   rfl
@@ -105,5 +115,13 @@ continuous. -/
 theorem continuous_toAddChar_uncurry [LocallyCompactSpace A] :
     Continuous fun p : AddPontryaginDual A × A ↦ p.1.toAddChar p.2 :=
   continuous_toMul.comp continuous_eval
+
+/-- A map `f` into the additive Pontryagin dual is continuous if `(x, a) ↦ (f x).toAddChar a` is
+jointly continuous. -/
+theorem continuous_of_continuous_uncurry {X : Type*} [TopologicalSpace X]
+    (f : X → AddPontryaginDual A) (h : Continuous fun p : X × A ↦ (f p.1).toAddChar p.2) :
+    Continuous f :=
+  ContinuousAddMonoidHom.continuous_of_continuous_uncurry (B := A) (C := AdditiveCircle) f
+    (continuous_ofMul.comp h)
 
 end AddPontryaginDual

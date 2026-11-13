@@ -13,5 +13,6 @@ public import PontryaginDuality.Inversion.Plancherel
 public import PontryaginDuality.Mathlib.MeasureTheory.Function.ContinuousMapDense
 public import PontryaginDuality.Mathlib.Topology.Algebra.Group.LocallyCompactSubgroup
 public import PontryaginDuality.Mathlib.Topology.Algebra.PontryaginDual
+public import PontryaginDuality.Mathlib.Topology.ContinuousMap.StoneWeierstrass
 public import PontryaginDuality.PositiveDefinite.Basic
 public import PontryaginDuality.PositiveDefinite.Bochner
