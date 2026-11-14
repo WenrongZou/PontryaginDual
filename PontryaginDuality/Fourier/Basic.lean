@@ -139,6 +139,119 @@ private theorem continuous_integral_circle_smul {X Y : Type*} [TopologicalSpace 
         exact hFΦ
       _ < ε := half_lt_self hε
 
+section Fubini
+
+/-! ### Fubini's theorem for kernels with values in the circle -/
+
+variable {X Y : Type*} [TopologicalSpace X] [WeaklyLocallyCompactSpace X] [R1Space X]
+  [MeasurableSpace X] [BorelSpace X] [TopologicalSpace Y] [WeaklyLocallyCompactSpace Y]
+  [R1Space Y] [MeasurableSpace Y] [BorelSpace Y] {μ : Measure X} [μ.Regular] {ν : Measure Y}
+  [ν.Regular] {c : X → Y → Circle} {f f₁ f₂ : X → ℂ} {Φ Φ₁ Φ₂ : Y → ℂ}
+
+omit [WeaklyLocallyCompactSpace X] [R1Space X] [μ.Regular] in
+private theorem integrable_mul_integral_circle_smul (hc : Continuous (Function.uncurry c))
+    (hf : Integrable f μ) (hΦ : Integrable Φ ν) :
+    Integrable (fun x ↦ f x * ∫ y, c x y • Φ y ∂ν) μ :=
+  hf.mul_bdd (c := ∫ y, ‖Φ y‖ ∂ν) (continuous_integral_circle_smul hc hΦ).aestronglyMeasurable
+    (.of_forall fun x ↦ (norm_integral_le_integral_norm _).trans_eq
+      (by simp only [Circle.norm_smul]))
+
+omit [WeaklyLocallyCompactSpace X] [R1Space X] [μ.Regular] in
+private theorem norm_integral_mul_integral_circle_smul_sub_le
+    (hc : Continuous (Function.uncurry c)) (hf : Integrable f μ) (hΦ₁ : Integrable Φ₁ ν)
+    (hΦ₂ : Integrable Φ₂ ν) :
+    ‖(∫ x, f x * ∫ y, c x y • Φ₁ y ∂ν ∂μ) - ∫ x, f x * ∫ y, c x y • Φ₂ y ∂ν ∂μ‖ ≤
+      (∫ x, ‖f x‖ ∂μ) * ∫ y, ‖Φ₁ y - Φ₂ y‖ ∂ν := by
+  have hcΦ {Φ : Y → ℂ} (hΦ : Integrable Φ ν) (x : X) : Integrable (fun y ↦ c x y • Φ y) ν := by
+    have hcx : Continuous (c x) := hc.comp (.prodMk_right x)
+    simp_rw [← integrable_norm_iff (hcx.aestronglyMeasurable.fun_smul hΦ.1), Circle.norm_smul]
+    exact hΦ.norm
+  rw [← integral_sub (integrable_mul_integral_circle_smul hc hf hΦ₁)
+    (integrable_mul_integral_circle_smul hc hf hΦ₂)]
+  refine (norm_integral_le_of_norm_le (hf.norm.mul_const _) (.of_forall fun x ↦ ?_)).trans_eq
+    (integral_mul_const _ _)
+  rw [← mul_sub, ← integral_sub (hcΦ hΦ₁ x) (hcΦ hΦ₂ x), norm_mul]
+  gcongr
+  exact (norm_integral_le_integral_norm _).trans_eq
+    (by simp only [← smul_sub, Circle.norm_smul])
+
+omit [WeaklyLocallyCompactSpace X] [R1Space X] [μ.Regular] in
+private theorem norm_integral_sub_mul_integral_circle_smul_le
+    (hc : Continuous (Function.uncurry c)) (hf₁ : Integrable f₁ μ) (hf₂ : Integrable f₂ μ)
+    (hΦ : Integrable Φ ν) :
+    ‖(∫ x, f₁ x * ∫ y, c x y • Φ y ∂ν ∂μ) - ∫ x, f₂ x * ∫ y, c x y • Φ y ∂ν ∂μ‖ ≤
+      (∫ x, ‖f₁ x - f₂ x‖ ∂μ) * ∫ y, ‖Φ y‖ ∂ν := by
+  rw [← integral_sub (integrable_mul_integral_circle_smul hc hf₁ hΦ)
+    (integrable_mul_integral_circle_smul hc hf₂ hΦ)]
+  refine (norm_integral_le_of_norm_le ((hf₁.sub hf₂).norm.mul_const _)
+    (.of_forall fun x ↦ ?_)).trans_eq (integral_mul_const _ _)
+  rw [← sub_mul, norm_mul]
+  refine mul_le_mul_of_nonneg_left ((norm_integral_le_integral_norm _).trans_eq ?_)
+    (norm_nonneg _)
+  simp only [Circle.norm_smul]
+
+/-- Auxiliary lemma for `integral_mul_integral_circle_smul`: if the formula holds for all
+continuous functions `Φ` with compact support, then it holds for all integrable `Φ`. -/
+private theorem integral_mul_integral_circle_smul_aux (hc : Continuous (Function.uncurry c))
+    (hf : Integrable f μ)
+    (H : ∀ Φ : Y → ℂ, Continuous Φ → HasCompactSupport Φ →
+      ∫ x, f x * ∫ y, c x y • Φ y ∂ν ∂μ = ∫ y, Φ y * ∫ x, c x y • f x ∂μ ∂ν)
+    (hΦ : Integrable Φ ν) :
+    ∫ x, f x * ∫ y, c x y • Φ y ∂ν ∂μ = ∫ y, Φ y * ∫ x, c x y • f x ∂μ ∂ν := by
+  have hc' : Continuous (Function.uncurry fun y x ↦ c x y) := hc.comp continuous_swap
+  refine eq_of_forall_dist_le fun δ hδ ↦ ?_
+  set m := ∫ x, ‖f x‖ ∂μ
+  have hm : 0 ≤ m := integral_nonneg fun _ ↦ norm_nonneg _
+  obtain ⟨Φ', hΦ', hΦΦ', hΦ'c, hΦ'i⟩ :=
+    (memLp_one_iff_integrable.2 hΦ).exists_hasCompactSupport_eLpNorm_sub_le' ENNReal.one_ne_top
+      (ε := ENNReal.ofReal (δ / (2 * m + 1))) (by positivity)
+  rw [memLp_one_iff_integrable] at hΦ'i
+  have hD : ∫ y, ‖(Φ - Φ') y‖ ∂ν ≤ δ / (2 * m + 1) := by
+    rw [← ENNReal.ofReal_le_ofReal_iff (by positivity),
+      ofReal_integral_norm_eq_lintegral_enorm (hΦ.sub hΦ'i),
+      ← eLpNorm_one_eq_lintegral_enorm (hΦ.sub hΦ'i).aestronglyMeasurable]
+    exact hΦΦ'
+  simp only [Pi.sub_apply] at hD
+  have hD0 : 0 ≤ ∫ y, ‖Φ y - Φ' y‖ ∂ν := integral_nonneg fun _ ↦ norm_nonneg _
+  rw [le_div_iff₀ (by positivity)] at hD
+  calc dist (∫ x, f x * ∫ y, c x y • Φ y ∂ν ∂μ) (∫ y, Φ y * ∫ x, c x y • f x ∂μ ∂ν)
+    _ ≤ dist (∫ x, f x * ∫ y, c x y • Φ y ∂ν ∂μ) (∫ x, f x * ∫ y, c x y • Φ' y ∂ν ∂μ) +
+        dist (∫ y, Φ' y * ∫ x, c x y • f x ∂μ ∂ν) (∫ y, Φ y * ∫ x, c x y • f x ∂μ ∂ν) := by
+      rw [← H Φ' hΦ'c hΦ']
+      exact dist_triangle _ _ _
+    _ ≤ m * (∫ y, ‖Φ y - Φ' y‖ ∂ν) + (∫ y, ‖Φ y - Φ' y‖ ∂ν) * m := by
+      refine add_le_add ?_ ?_
+      · rw [dist_eq_norm]
+        exact norm_integral_mul_integral_circle_smul_sub_le hc hf hΦ hΦ'i
+      · rw [dist_comm, dist_eq_norm]
+        exact norm_integral_sub_mul_integral_circle_smul_le hc' hΦ hΦ'i hf
+    _ ≤ δ := by nlinarith
+
+/-- Fubini's theorem for a jointly continuous kernel with values in the circle, on regular
+measures which are not necessarily `σ`-finite. -/
+private theorem integral_mul_integral_circle_smul (hc : Continuous (Function.uncurry c))
+    (hf : Integrable f μ) (hΦ : Integrable Φ ν) :
+    ∫ x, f x * ∫ y, c x y • Φ y ∂ν ∂μ = ∫ y, Φ y * ∫ x, c x y • f x ∂μ ∂ν := by
+  -- By density, we may assume that `f` and `Φ` are continuous with compact support.
+  have hc' : Continuous (Function.uncurry fun y x ↦ c x y) := hc.comp continuous_swap
+  refine integral_mul_integral_circle_smul_aux hc hf (fun Φ hΦc hΦs ↦ ?_) hΦ
+  refine (integral_mul_integral_circle_smul_aux hc'
+    (hΦc.integrable_of_hasCompactSupport hΦs) (fun f hfc hfs ↦ ?_) hf).symm
+  simp_rw [← integral_const_mul]
+  refine (integral_integral_swap_of_hasCompactSupport
+    (f := fun y x ↦ Φ y * c x y • f x) ((hΦc.comp continuous_fst).mul
+      (hc'.smul (hfc.comp continuous_snd))) ?_).trans ?_
+  · refine .intro (hΦs.isCompact.prod hfs.isCompact) fun p hp ↦ ?_
+    by_cases h1 : p.1 ∈ tsupport Φ
+    · have h2 : p.2 ∉ tsupport f := fun h2 ↦ hp ⟨h1, h2⟩
+      simp [Function.uncurry, image_eq_zero_of_notMem_tsupport h2]
+    · simp [Function.uncurry, image_eq_zero_of_notMem_tsupport h1]
+  · refine integral_congr_ae (.of_forall fun x ↦ integral_congr_ae (.of_forall fun y ↦ ?_))
+    simp only [Circle.smul_def, smul_eq_mul]
+    ring
+
+end Fubini
+
 section AddGroup
 
 variable [IsTopologicalAddGroup G] [LocallyCompactSpace G] [BorelSpace G]
@@ -198,6 +311,34 @@ theorem continuous_fourierIntegralInv [MeasurableSpace (AddPontryaginDual G)]
     Continuous (fourierIntegralInv ν F) :=
   continuous_integral_circle_smul (c := fun x (χ : AddPontryaginDual G) ↦ χ.toAddChar x)
     (continuous_toAddChar_uncurry.comp continuous_swap) hF
+
+section Mul
+
+variable [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)]
+  {ν : Measure (AddPontryaginDual G)} [ν.Regular] {f : G → ℂ} {F : AddPontryaginDual G → ℂ}
+
+omit [μ.IsAddHaarMeasure] in
+/-- The multiplication formula: `∫ x, f x * F̌ x ∂μ = ∫ χ, f̂ (-χ) * F χ ∂ν`. It holds for
+regular measures which are not necessarily `σ`-finite. -/
+theorem integral_mul_fourierIntegralInv (hf : Integrable f μ) (hF : Integrable F ν) :
+    ∫ x, f x * fourierIntegralInv ν F x ∂μ = ∫ χ, fourierIntegral μ f (-χ) * F χ ∂ν := by
+  have h (χ : AddPontryaginDual G) :
+      fourierIntegral μ f (-χ) = ∫ x, χ.toAddChar x • f x ∂μ := by
+    simp [fourierIntegral, AddChar.map_neg_eq_inv]
+  simp_rw [h, mul_comm _ (F _)]
+  exact integral_mul_integral_circle_smul (c := fun x (χ : AddPontryaginDual G) ↦ χ.toAddChar x)
+    (continuous_toAddChar_uncurry.comp continuous_swap) hf hF
+
+omit [μ.IsAddHaarMeasure] in
+/-- The multiplication formula: `∫ χ, f̂ χ * F χ ∂ν = ∫ x, f x * F̌ (-x) ∂μ`. -/
+theorem integral_fourierIntegral_mul (hf : Integrable f μ) (hF : Integrable F ν) :
+    ∫ χ, fourierIntegral μ f χ * F χ ∂ν = ∫ x, f x * fourierIntegralInv ν F (-x) ∂μ := by
+  simp_rw [mul_comm _ (F _)]
+  exact (integral_mul_integral_circle_smul
+    (c := fun x (χ : AddPontryaginDual G) ↦ χ.toAddChar (-x))
+    (continuous_toAddChar_uncurry.comp (continuous_snd.prodMk continuous_fst.neg)) hf hF).symm
+
+end Mul
 
 section Lp
 

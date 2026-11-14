@@ -20,16 +20,19 @@ import Mathlib.MeasureTheory.Function.LpSpace.DomAct.Continuous
 /-!
 # Positive definite functions on groups
 
-A function `φ : G → 𝕜` on an additive group is *positive definite* (or *of positive type*) if for
-all `x₁, …, xₙ : G` the matrix `(φ (-xᵢ + xⱼ))ᵢⱼ` is positive semidefinite. Note that, despite
-the classical name, this is a semidefiniteness condition.
+A function `φ : G → 𝕜` on an additive group is *positive definite* (or *of positive type*) if the
+kernel `(x, y) ↦ φ (-x + y)` is positive semidefinite, i.e. if for all `x₁, …, xₙ : G` the matrix
+`(φ (-xᵢ + xⱼ))ᵢⱼ` is positive semidefinite. Note that, despite the classical name, this is a
+semidefiniteness condition.
 
 ## Main definitions
 
-* `IsPositiveDefinite φ`: the function `φ : G → 𝕜` is positive definite.
+* `IsPositiveDefinite φ`: the function `φ : G → 𝕜` is positive definite. It is defined as the
+  positive semidefiniteness of the matrix `(φ (-x + y))` indexed by `G` (see `Matrix.PosSemidef`).
 
 ## Main statements
 
+* `isPositiveDefinite_iff_forall_fin`: the formulation in terms of finite families.
 * `IsPositiveDefinite.apply_neg`, `IsPositiveDefinite.norm_apply_le`: a positive definite function
   satisfies `φ (-x) = conj (φ x)` and `‖φ x‖ ≤ ‖φ 0‖`.
 * `AddChar.isPositiveDefinite`: unitary characters are positive definite.
@@ -52,29 +55,37 @@ open scoped ComplexOrder ComplexConjugate ENNReal Pointwise
 
 variable {G 𝕜 : Type*} [AddGroup G] [RCLike 𝕜]
 
-/-- A function `φ : G → 𝕜` on an additive group is positive definite if for all `x₁, …, xₙ : G`
-the matrix `(φ (-xᵢ + xⱼ))ᵢⱼ` is positive semidefinite. -/
+/-- A function `φ : G → 𝕜` on an additive group is positive definite if the kernel
+`(x, y) ↦ φ (-x + y)` is positive semidefinite, i.e. if the matrix `(φ (-x + y))` indexed by `G`
+is positive semidefinite. See `isPositiveDefinite_iff_forall_fin` for the formulation in terms of
+finite families of elements of `G`. -/
 def IsPositiveDefinite (φ : G → 𝕜) : Prop :=
-  ∀ (n : ℕ) (x : Fin n → G), (Matrix.of fun i j ↦ φ (-x i + x j)).PosSemidef
+  (Matrix.of fun x y : G ↦ φ (-x + y)).PosSemidef
 
 namespace IsPositiveDefinite
 
 variable {φ ψ : G → 𝕜}
 
-theorem sum_nonneg (hφ : IsPositiveDefinite φ) {n : ℕ} (x : Fin n → G) (c : Fin n → 𝕜) :
+/-- If `φ` is positive definite, then the matrix `(φ (-xᵢ + xⱼ))ᵢⱼ` is positive semidefinite for
+every family `x` of elements of `G`. -/
+theorem posSemidef (hφ : IsPositiveDefinite φ) {ι : Type*} (x : ι → G) :
+    (Matrix.of fun i j ↦ φ (-x i + x j)).PosSemidef :=
+  Matrix.PosSemidef.submatrix hφ x
+
+theorem sum_nonneg (hφ : IsPositiveDefinite φ) {ι : Type*} [Fintype ι] (x : ι → G) (c : ι → 𝕜) :
     0 ≤ ∑ i, ∑ j, conj (c i) * φ (-x i + x j) * c j := by
   simpa [dotProduct, Matrix.mulVec, Finset.mul_sum, mul_assoc] using
-    (hφ n x).dotProduct_mulVec_nonneg c
+    (hφ.posSemidef x).dotProduct_mulVec_nonneg c
 
 theorem apply_zero_nonneg (hφ : IsPositiveDefinite φ) : 0 ≤ φ 0 := by
   simpa using hφ.sum_nonneg (fun _ : Fin 1 ↦ (0 : G)) fun _ ↦ 1
 
 theorem apply_neg (hφ : IsPositiveDefinite φ) (x : G) : φ (-x) = conj (φ x) := by
-  simpa using ((hφ 2 ![0, x]).isHermitian.apply 1 0).symm
+  simpa using (hφ.isHermitian.apply x 0).symm
 
 theorem norm_apply_le (hφ : IsPositiveDefinite φ) (x : G) : ‖φ x‖ ≤ ‖φ 0‖ := by
   -- The determinant of the matrix associated with `0` and `x` is nonnegative.
-  have h := (hφ 2 ![0, x]).det_nonneg
+  have h := (hφ.posSemidef ![0, x]).det_nonneg
   rw [Matrix.det_fin_two] at h
   simp only [Matrix.of_apply, Matrix.cons_val_zero, Matrix.cons_val_one, neg_zero, zero_add,
     add_zero, neg_add_cancel, hφ.apply_neg, RCLike.mul_conj, sub_nonneg] at h
@@ -83,34 +94,52 @@ theorem norm_apply_le (hφ : IsPositiveDefinite φ) (x : G) : ‖φ x‖ ≤ ‖
   exact (sq_le_sq₀ (norm_nonneg _) (norm_nonneg _)).1 h
 
 protected theorem zero : IsPositiveDefinite (0 : G → 𝕜) :=
-  fun _ _ ↦ Matrix.PosSemidef.zero
+  Matrix.PosSemidef.zero
 
 protected theorem add (hφ : IsPositiveDefinite φ) (hψ : IsPositiveDefinite ψ) :
     IsPositiveDefinite (φ + ψ) :=
-  fun n x ↦ (hφ n x).add (hψ n x)
+  Matrix.PosSemidef.add hφ hψ
 
 protected theorem smul (hφ : IsPositiveDefinite φ) {c : ℝ} (hc : 0 ≤ c) :
     IsPositiveDefinite (c • φ) :=
-  fun n x ↦ (hφ n x).smul hc
+  Matrix.PosSemidef.smul hφ hc
 
 /-- The product of two positive definite functions is positive definite. This follows from the
 Schur product theorem. -/
 protected theorem mul (hφ : IsPositiveDefinite φ) (hψ : IsPositiveDefinite ψ) :
     IsPositiveDefinite (φ * ψ) :=
-  fun n x ↦ (hφ n x).hadamard (hψ n x)
+  Matrix.PosSemidef.hadamard hφ hψ
 
 protected theorem star (hφ : IsPositiveDefinite φ) : IsPositiveDefinite fun x ↦ conj (φ x) := by
-  intro n x
-  convert (hφ n x).transpose using 1
-  ext i j
+  unfold IsPositiveDefinite
+  convert Matrix.PosSemidef.transpose hφ using 1
+  ext x y
   simp [← hφ.apply_neg]
 
+theorem comp_neg (hφ : IsPositiveDefinite φ) : IsPositiveDefinite fun x ↦ φ (-x) := by
+  simpa only [hφ.apply_neg] using hφ.star
+
 end IsPositiveDefinite
+
+/-- A function `φ` is positive definite if and only if the matrix `(φ (-xᵢ + xⱼ))ᵢⱼ` is positive
+semidefinite for all `x₁, …, xₙ : G`. -/
+theorem isPositiveDefinite_iff_forall_fin {φ : G → 𝕜} :
+    IsPositiveDefinite φ ↔
+      ∀ (n : ℕ) (x : Fin n → G), (Matrix.of fun i j ↦ φ (-x i + x j)).PosSemidef := by
+  refine ⟨fun h n x ↦ h.posSemidef x, fun h ↦ ⟨?_, fun c ↦ ?_⟩⟩
+  · exact Matrix.IsHermitian.ext fun x y ↦ by simpa using (h 2 ![x, y]).isHermitian.apply 0 1
+  · classical
+    have hs : ((Matrix.of fun x y : G ↦ φ (-x + y)).submatrix (↑) (↑) :
+        Matrix c.support c.support 𝕜).PosSemidef :=
+      (Matrix.posSemidef_submatrix_equiv c.support.equivFin.symm).1
+        (h _ fun i ↦ (c.support.equivFin.symm i : G))
+    simpa [Finsupp.sum, ← Finset.sum_attach c.support, ← Finset.subtype_mem_eq_attach,
+      ← Finsupp.subtypeDomain_apply, ← Finsupp.support_subtypeDomain] using hs.2 _
 
 /-- Unitary characters are positive definite. -/
 theorem AddChar.isPositiveDefinite (ψ : AddChar G Circle) :
     IsPositiveDefinite fun x ↦ (ψ x : ℂ) := by
-  intro n x
+  refine isPositiveDefinite_iff_forall_fin.2 fun n x ↦ ?_
   convert Matrix.posSemidef_vecMulVec_self_star fun i ↦ (ψ (-x i) : ℂ) using 1
   ext i j
   simp [Matrix.vecMulVec_apply, AddChar.map_add_eq_mul, AddChar.map_neg_eq_inv,
@@ -125,7 +154,7 @@ variable [MeasurableSpace G] [TopologicalSpace G] [IsTopologicalAddGroup G] [Bor
 theorem isPositiveDefinite_integral_mul_conj [μ.IsAddLeftInvariant] {f : G → 𝕜}
     (hf : MemLp f 2 μ) : IsPositiveDefinite fun x ↦ ∫ y, f y * conj (f (-x + y)) ∂μ := by
   -- The matrix is the transpose of the Gram matrix of the translates of `f` in `L²`.
-  intro n x
+  refine isPositiveDefinite_iff_forall_fin.2 fun n x ↦ ?_
   have hF (i : Fin n) : MemLp (fun z ↦ f (-x i + z)) 2 μ :=
     hf.comp_measurePreserving (measurePreserving_add_left μ (-x i))
   convert (Matrix.posSemidef_gram 𝕜 fun i ↦ (hF i).toLp _).transpose using 1

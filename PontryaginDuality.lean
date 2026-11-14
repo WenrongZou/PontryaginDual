@@ -11,6 +11,7 @@ public import PontryaginDuality.Fourier.L1
 public import PontryaginDuality.Inversion.DualHaar
 public import PontryaginDuality.Inversion.Plancherel
 public import PontryaginDuality.Mathlib.MeasureTheory.Function.ContinuousMapDense
+public import PontryaginDuality.Mathlib.MeasureTheory.Integral.RieszMarkovKakutani.ZeroAtInfty
 public import PontryaginDuality.Mathlib.Topology.Algebra.Group.LocallyCompactSubgroup
 public import PontryaginDuality.Mathlib.Topology.Algebra.PontryaginDual
 public import PontryaginDuality.Mathlib.Topology.ContinuousMap.StoneWeierstrass

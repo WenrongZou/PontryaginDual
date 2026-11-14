@@ -7,6 +7,7 @@ module
 
 public import Mathlib.MeasureTheory.Function.ContinuousMapDense
 
+import Mathlib.MeasureTheory.Function.AEEqOfIntegral
 import Mathlib.Topology.UrysohnsLemma
 
 /-!
@@ -84,5 +85,59 @@ theorem Lp.dense_hasCompactSupport_continuous [μ.Regular] [Fact (1 ≤ p)] (hp 
   apply eLpNorm_congr_ae
   gcongr
   exact hg₄.coeFn_toLp
+
+/-- If the integral of an integrable function `f` against every compactly supported continuous
+function vanishes, then `f` vanishes almost everywhere. -/
+theorem Integrable.ae_eq_zero_of_forall_integral_smul_eq_zero [μ.Regular] [CompleteSpace E]
+    {f : α → E} (hf : Integrable f μ)
+    (h : ∀ g : α → ℝ, Continuous g → HasCompactSupport g → ∫ x, g x • f x ∂μ = 0) :
+    f =ᵐ[μ] 0 := by
+  refine hf.ae_eq_zero_of_forall_setIntegral_eq_zero fun s hs hμs ↦ ?_
+  refine norm_le_zero_iff.1 (le_of_forall_pos_le_add fun ε hε ↦ ?_)
+  -- Approximate the indicator function of `s` by a continuous function `g` with compact support
+  -- such that `0 ≤ g ≤ 1` and `g = 1_s` outside of a set `V \ K` of small measure.
+  obtain ⟨δ, hδ, H⟩ := exists_pos_setLIntegral_lt_of_measure_lt (f := fun x ↦ ‖f x‖ₑ) hf.2.ne
+    (ε := ENNReal.ofReal ε) (by positivity)
+  obtain ⟨K, hKs, hK, hK', hμK⟩ :=
+    hs.exists_isCompact_isClosed_sdiff_lt hμs.ne (ENNReal.half_pos hδ.ne').ne'
+  obtain ⟨V, hsV, hV, -, hμV⟩ := hs.exists_isOpen_sdiff_lt hμs.ne (ENNReal.half_pos hδ.ne').ne'
+  obtain ⟨g, hg1, hg0, hgc, hg01⟩ := exists_continuous_one_zero_of_isCompact hK
+    hV.isClosed_compl (disjoint_compl_right_iff_subset.2 (hKs.trans hsV))
+  have hVK : MeasurableSet (V \ K) := hV.measurableSet.diff hK'.measurableSet
+  have hμVK : μ (V \ K) < δ :=
+    calc μ (V \ K) ≤ μ (V \ s ∪ s \ K) := measure_mono fun x hx ↦ by
+          by_cases hxs : x ∈ s
+          exacts [Or.inr ⟨hxs, hx.2⟩, Or.inl ⟨hx.1, hxs⟩]
+      _ ≤ μ (V \ s) + μ (s \ K) := measure_union_le _ _
+      _ < δ / 2 + δ / 2 := ENNReal.add_lt_add hμV hμK
+      _ = δ := ENNReal.add_halves δ
+  have hgf : Integrable (fun x ↦ g x • f x) μ :=
+    hf.bdd_smul 1 g.continuous.aestronglyMeasurable
+      (.of_forall fun x ↦ by
+        rw [Real.norm_eq_abs, abs_le]
+        constructor <;> linarith [(hg01 x).1, (hg01 x).2])
+  calc ‖∫ x in s, f x ∂μ‖
+    _ = ‖∫ x, (s.indicator f x - g x • f x) ∂μ‖ := by
+      rw [integral_sub (hf.indicator hs) hgf, integral_indicator hs, h g g.continuous hgc,
+        sub_zero]
+    _ ≤ ∫ x, (V \ K).indicator (fun x ↦ ‖f x‖) x ∂μ := by
+      refine norm_integral_le_of_norm_le (hf.norm.indicator hVK) (.of_forall fun x ↦ ?_)
+      by_cases hxV : x ∈ V
+      swap
+      · simp [show x ∉ s from fun hx ↦ hxV (hsV hx), hg0 hxV, hxV]
+      by_cases hxK : x ∈ K
+      · simp [hKs hxK, hg1 hxK, hxK]
+      rw [indicator_of_mem (show x ∈ V \ K from ⟨hxV, hxK⟩)]
+      by_cases hxs : x ∈ s
+      · rw [indicator_of_mem hxs, show f x - g x • f x = (1 - g x) • f x by
+          rw [sub_smul, one_smul], norm_smul, Real.norm_eq_abs]
+        refine mul_le_of_le_one_left (norm_nonneg _) (abs_le.2 ⟨?_, ?_⟩) <;>
+          linarith [(hg01 x).1, (hg01 x).2]
+      · rw [indicator_of_notMem hxs, zero_sub, norm_neg, norm_smul, Real.norm_eq_abs]
+        refine mul_le_of_le_one_left (norm_nonneg _) (abs_le.2 ⟨?_, ?_⟩) <;>
+          linarith [(hg01 x).1, (hg01 x).2]
+    _ ≤ 0 + ε := by
+      rw [integral_indicator hVK, integral_norm_eq_lintegral_enorm hf.1.restrict, zero_add]
+      exact ENNReal.toReal_le_of_le_ofReal hε.le (H _ hμVK).le
 
 end MeasureTheory
