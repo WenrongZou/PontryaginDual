@@ -38,6 +38,8 @@ semidefiniteness condition.
 * `AddChar.isPositiveDefinite`: unitary characters are positive definite.
 * `isPositiveDefinite_integral_mul_conj`: the function `x ↦ ∫ y, f y * conj (f (-x + y)) ∂μ` is
   positive definite for `f` in `L²`. This is the convolution of `f` and `x ↦ conj (f (-x))`.
+* `tsupport_integral_mul_conj_subset`, `hasCompactSupport_integral_mul_conj`: the function
+  `x ↦ ∫ y, f y * conj (f (-x + y)) ∂μ` has compact support if `f` does.
 * `IsPositiveDefinite.integral_integral_nonneg`: the integral form of positive definiteness for
   continuous functions.
 * `exists_isPositiveDefinite_hasCompactSupport`: on a locally compact group, there are continuous
@@ -180,6 +182,26 @@ theorem continuous_integral_mul_conj [LocallyCompactSpace G] [μ.IsAddHaarMeasur
       hf.coeFn_toLp] with y h1 h2 h3
   simp only [Equiv.symm_apply_apply, vadd_eq_add] at h2
   rw [h2, h3, h1, RCLike.inner_apply]
+
+omit [BorelSpace G] in
+/-- The support of `x ↦ ∫ y, f y * conj (f (-x + y)) ∂μ` is contained in
+`tsupport f + -tsupport f`. -/
+theorem tsupport_integral_mul_conj_subset {f : G → 𝕜} (hf : HasCompactSupport f) :
+    tsupport (fun x ↦ ∫ y, f y * conj (f (-x + y)) ∂μ) ⊆ tsupport f + -tsupport f := by
+  refine closure_minimal (fun x hx ↦ ?_) ((isClosed_tsupport f).neg.add_left_of_isCompact hf)
+  by_contra hxC
+  refine hx (integral_eq_zero_of_ae (.of_forall fun y ↦ ?_))
+  by_contra hy
+  obtain ⟨h1, h2⟩ := mul_ne_zero_iff.1 hy
+  exact hxC ⟨y, subset_tsupport _ h1, -(-x + y),
+    Set.neg_mem_neg.2 (subset_tsupport _ ((map_ne_zero _).1 h2)), by simp⟩
+
+omit [BorelSpace G] in
+/-- If `f` has compact support, then so does `x ↦ ∫ y, f y * conj (f (-x + y)) ∂μ`. -/
+theorem hasCompactSupport_integral_mul_conj {f : G → 𝕜} (hf : HasCompactSupport f) :
+    HasCompactSupport fun x ↦ ∫ y, f y * conj (f (-x + y)) ∂μ :=
+  (hf.isCompact.add hf.isCompact.neg).of_isClosed_subset (isClosed_tsupport _)
+    (tsupport_integral_mul_conj_subset hf)
 
 omit [MeasurableSpace G] [BorelSpace G] in
 /-- Two-sided uniform continuity of a continuous function on a compact set. -/
@@ -346,18 +368,9 @@ theorem exists_isPositiveDefinite_hasCompactSupport [TopologicalSpace G] [IsTopo
   have hfV : tsupport f ⊆ V := closure_minimal (fun x hx ↦ by_contra fun hxV ↦ hx (by
     simp [f, hg0 fun h ↦ hxV (interior_subset h)])) hVc
   have hf2 : MemLp f 2 μ := hf.memLp_of_hasCompactSupport hfc
-  have hsupp : tsupport (fun x ↦ ∫ y, f y * conj (f (-x + y)) ∂μ) ⊆
-      tsupport f + -tsupport f := by
-    refine closure_minimal (fun x hx ↦ ?_) ((isClosed_tsupport f).neg.add_left_of_isCompact hfc)
-    by_contra hxC
-    refine hx (integral_eq_zero_of_ae (.of_forall fun y ↦ ?_))
-    by_contra hy
-    obtain ⟨h1, h2⟩ := mul_ne_zero_iff.1 hy
-    exact hxC ⟨y, subset_tsupport _ h1, -(-x + y),
-      Set.neg_mem_neg.2 (subset_tsupport _ ((map_ne_zero _).1 h2)), by simp⟩
   refine ⟨fun x ↦ ∫ y, f y * conj (f (-x + y)) ∂μ, continuous_integral_mul_conj hf2,
-    (hfc.isCompact.add hfc.isCompact.neg).of_isClosed_subset (isClosed_tsupport _) hsupp,
-    isPositiveDefinite_integral_mul_conj hf2, hsupp.trans ?_, ?_⟩
+    hasCompactSupport_integral_mul_conj hfc, isPositiveDefinite_integral_mul_conj hf2,
+    (tsupport_integral_mul_conj_subset hfc).trans ?_, ?_⟩
   · rintro _ ⟨a, ha, b, hb, rfl⟩
     simpa using hV₁U a (hVV₁ (hfV ha)) (-b) (hVV₁ (hfV (Set.mem_neg.1 hb)))
   · have hpos : 0 < ∫ y, g y * g y ∂μ :=

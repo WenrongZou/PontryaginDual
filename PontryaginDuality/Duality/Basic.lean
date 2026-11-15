@@ -81,7 +81,31 @@ theorem isInducing_doubleDualEmb : IsInducing (doubleDualEmb G) := by
   -- is continuous (`continuous_fourierIntegral`), so
   -- `W = {ξ | fourierIntegral ν (fourierIntegral μ φ) (-ξ) ≠ 0}` is an open neighborhood of `0`.
   -- If `doubleDualEmb G x ∈ W`, then `φ x ≠ 0`, hence `x ∈ U`.
-  sorry
+  refine IsTopologicalAddGroup.isInducing_iff_nhds_zero.2 (le_antisymm ?_ fun U hU ↦ ?_)
+  · have h := (map_continuous (doubleDualEmb G)).tendsto 0
+    rw [map_zero] at h
+    exact h.le_comap
+  borelize G (AddPontryaginDual G)
+  let μ : Measure G := Measure.addHaar
+  obtain ⟨φ, hφ, hφc, hφp, hφU, hφ0⟩ := exists_isPositiveDefinite_hasCompactSupport hU
+  have hφi : Integrable φ μ := hφ.integrable_of_hasCompactSupport hφc
+  have hΘ : Continuous (fourierIntegral μ.dualAddHaar (fourierIntegral μ φ)) :=
+    continuous_fourierIntegral (integrable_fourierIntegral hφ hφi hφp)
+  have hΘx (x : G) :
+      fourierIntegral μ.dualAddHaar (fourierIntegral μ φ) (-doubleDualEmb G x) = φ x := by
+    rw [← map_neg, fourierIntegral_doubleDualEmb, neg_neg,
+      fourierIntegralInv_fourierIntegral hφ hφi hφp]
+  refine Filter.mem_comap.2
+    ⟨{ξ | fourierIntegral μ.dualAddHaar (fourierIntegral μ φ) (-ξ) ≠ 0},
+      (isOpen_ne_fun (hΘ.comp continuous_neg) continuous_const).mem_nhds ?_, fun x hx ↦ ?_⟩
+  · have h := hΘx 0
+    rw [map_zero] at h
+    change fourierIntegral μ.dualAddHaar (fourierIntegral μ φ) (-0) ≠ 0
+    rw [h]
+    exact hφ0
+  · have hx' : fourierIntegral μ.dualAddHaar (fourierIntegral μ φ) (-doubleDualEmb G x) ≠ 0 := hx
+    rw [hΘx] at hx'
+    exact hφU (subset_tsupport φ hx')
 
 variable [T2Space G]
 
@@ -101,7 +125,11 @@ theorem isClosed_range_doubleDualEmb : IsClosed (Set.range (doubleDualEmb G)) :=
   -- The range is an additive subgroup of the double dual. It is homeomorphic to `G` by
   -- `isEmbedding_doubleDualEmb`, hence locally compact. Apply
   -- `AddSubgroup.isClosed_of_locallyCompactSpace`.
-  sorry
+  let H : AddSubgroup (AddPontryaginDual (AddPontryaginDual G)) :=
+    (doubleDualEmb G).toAddMonoidHom.range
+  have : LocallyCompactSpace H :=
+    (isEmbedding_doubleDualEmb G).toHomeomorph.symm.isClosedEmbedding.locallyCompactSpace
+  exact AddSubgroup.isClosed_of_locallyCompactSpace (H := H)
 
 /-- The canonical map from a locally compact Hausdorff abelian group to its double dual is
 surjective. -/
@@ -116,7 +144,21 @@ theorem doubleDualEmb_surjective : Function.Surjective (doubleDualEmb G) := by
   -- `fourierIntegralInv ν F = 0`, hence `F = 0` almost everywhere by
   -- `ae_eq_zero_of_fourierIntegralInv_eq_zero`, and `fourierIntegral ν F = 0` by
   -- `fourierIntegral_congr_ae`, a contradiction.
-  sorry
+  by_contra hsurj
+  have hne : (Set.range (doubleDualEmb G))ᶜ.Nonempty :=
+    Set.nonempty_compl.2 fun h ↦ hsurj (Set.range_eq_univ.1 h)
+  borelize G (AddPontryaginDual G) (AddPontryaginDual (AddPontryaginDual G))
+  let μ : Measure G := Measure.addHaar
+  obtain ⟨F, hF, hF0, hFU⟩ := exists_integrable_fourierIntegral_ne_zero μ.dualAddHaar
+    (isClosed_range_doubleDualEmb G).isOpen_compl hne
+  have hinv : fourierIntegralInv μ.dualAddHaar F = 0 := by
+    ext x
+    rw [← neg_neg x, ← fourierIntegral_doubleDualEmb]
+    exact hFU _ fun h ↦ h (Set.mem_range_self _)
+  refine hF0 ?_
+  rw [fourierIntegral_congr_ae (ae_eq_zero_of_fourierIntegralInv_eq_zero hF hinv)]
+  ext ξ
+  simp [fourierIntegral]
 
 theorem doubleDualEmb_bijective : Function.Bijective (doubleDualEmb G) :=
   ⟨doubleDualEmb_injective G, doubleDualEmb_surjective G⟩

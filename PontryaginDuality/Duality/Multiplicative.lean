@@ -80,6 +80,62 @@ theorem doubleDualEmb_apply (a : A) (χ : PontryaginDual A) : doubleDualEmb A a 
 
 end Monoid
 
+section Additive
+
+/-! ### Reduction to the additive case -/
+
+variable (A : Type*) [AddCommGroup A] [TopologicalSpace A] [IsTopologicalAddGroup A]
+  [LocallyCompactSpace A]
+
+/-- The canonical map from the double Pontryagin dual of `Multiplicative A` to the double additive
+Pontryagin dual of `A`, obtained from `AddPontryaginDual.toMultiplicativeMulEquiv A` and
+`AddPontryaginDual.toMultiplicative (AddPontryaginDual A)`. -/
+private noncomputable def toAddDoubleDual
+    (ξ : PontryaginDual (PontryaginDual (Multiplicative A))) :
+    AddPontryaginDual (AddPontryaginDual A) :=
+  (AddPontryaginDual.toMultiplicative (AddPontryaginDual A)).symm
+    (map (AddPontryaginDual.toMultiplicativeMulEquiv A :
+      Multiplicative (AddPontryaginDual A) →ₜ* PontryaginDual (Multiplicative A)) ξ)
+
+omit [IsTopologicalAddGroup A] [LocallyCompactSpace A] in
+private theorem continuous_toAddDoubleDual : Continuous (toAddDoubleDual A) :=
+  (AddPontryaginDual.toMultiplicative (AddPontryaginDual A)).symm.continuous.comp
+    (map_continuous (map _))
+
+omit [IsTopologicalAddGroup A] [LocallyCompactSpace A] in
+private theorem toAddDoubleDual_injective : Function.Injective (toAddDoubleDual A) := by
+  intro ξ ξ' h
+  have h' := (AddPontryaginDual.toMultiplicative (AddPontryaginDual A)).symm.injective h
+  refine PontryaginDual.ext fun χ ↦ ?_
+  obtain ⟨φ, rfl⟩ := (AddPontryaginDual.toMultiplicativeMulEquiv A).surjective χ
+  exact DFunLike.congr_fun h' φ
+
+omit [IsTopologicalAddGroup A] in
+/-- The map `toAddDoubleDual A` intertwines `PontryaginDual.doubleDualEmb (Multiplicative A)` and
+`AddPontryaginDual.doubleDualEmb A`. -/
+private theorem toAddDoubleDual_comp_doubleDualEmb :
+    toAddDoubleDual A ∘ doubleDualEmb (Multiplicative A) =
+      AddPontryaginDual.doubleDualEmb A ∘ Multiplicative.toAdd :=
+  rfl
+
+private theorem isInducing_doubleDualEmb_multiplicative :
+    IsInducing (doubleDualEmb (Multiplicative A)) := by
+  have htoAdd : IsInducing (Multiplicative.toAdd : Multiplicative A → A) := ⟨induced_id.symm⟩
+  refine .of_comp (map_continuous _) (continuous_toAddDoubleDual A) ?_
+  rw [toAddDoubleDual_comp_doubleDualEmb]
+  exact (AddPontryaginDual.isInducing_doubleDualEmb A).comp htoAdd
+
+private theorem doubleDualEmb_multiplicative_bijective [T2Space A] :
+    Function.Bijective (doubleDualEmb (Multiplicative A)) := by
+  have hb : Function.Bijective (toAddDoubleDual A ∘ doubleDualEmb (Multiplicative A)) := by
+    rw [toAddDoubleDual_comp_doubleDualEmb]
+    exact (AddPontryaginDual.doubleDualEmb_bijective A).comp Multiplicative.toAdd.bijective
+  refine ⟨hb.1.of_comp, fun ξ ↦ ?_⟩
+  obtain ⟨x, hx⟩ := hb.2 (toAddDoubleDual A ξ)
+  exact ⟨x, toAddDoubleDual_injective A hx⟩
+
+end Additive
+
 variable (G : Type*) [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G]
   [LocallyCompactSpace G]
 
@@ -91,7 +147,7 @@ theorem isInducing_doubleDualEmb : IsInducing (doubleDualEmb G) := by
   -- `AddPontryaginDual (AddPontryaginDual (Additive G)) ≃ PontryaginDual (PontryaginDual G)`
   -- obtained from `AddPontryaginDual.toMultiplicativeMulEquiv` intertwine
   -- `AddPontryaginDual.doubleDualEmb (Additive G)` and `PontryaginDual.doubleDualEmb G`.
-  sorry
+  exact isInducing_doubleDualEmb_multiplicative (Additive G)
 
 variable [T2Space G]
 
@@ -99,7 +155,8 @@ variable [T2Space G]
 bijective. -/
 theorem doubleDualEmb_bijective : Function.Bijective (doubleDualEmb G) := by
   -- Same proof as `isInducing_doubleDualEmb`, from `AddPontryaginDual.doubleDualEmb_bijective`.
-  sorry
+  have : T2Space (Additive G) := ‹T2Space G›
+  exact doubleDualEmb_multiplicative_bijective (Additive G)
 
 /-- **Pontryagin duality**: a locally compact Hausdorff abelian group is canonically isomorphic,
 as a topological group, to its double Pontryagin dual. -/
