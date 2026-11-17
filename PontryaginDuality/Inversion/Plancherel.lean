@@ -42,8 +42,8 @@ inversion formula for the functions `f * g⋆`, where `f` and `g` are in `L¹ �
 ## Implementation notes
 
 We follow [bourbaki1967], Chap. II, §1, n°3–4. Théorème 1 is `fourierL2`, formula (20) is
-`integral_conj_fourierIntegral_mul_fourierIntegral`, formulas (16) and (17) are
-`spectralCLM_toLp_toLp`, Proposition 4 is `fourierIntegralInv_fourierIntegral_mul_conj`, the
+`integral_conj_fourierIntegral_mul_fourierIntegral`, Proposition 4 is
+`fourierIntegralInv_fourierIntegral_mul_conj`, the
 remark which follows it is `coeFn_fourierL2_symm`, and Proposition 5 is
 `exists_integrable_fourierIntegral_ne_zero`.
 
@@ -56,7 +56,7 @@ remark which follows it is `coeFn_fourierL2_symm`, and Proposition 5 is
 @[expose] public section
 
 open MeasureTheory Measure Filter Topology
-open scoped ENNReal NNReal Convolution ComplexConjugate ZeroAtInfty
+open scoped ENNReal NNReal Convolution ComplexConjugate
 
 /-- The subspace `L¹ ∩ L²` of `L²`. -/
 def MeasureTheory.Lp.integrableSubmodule {α : Type*} [MeasurableSpace α] (μ : Measure α) :
@@ -337,28 +337,6 @@ theorem integrable_fourierIntegral_mul_conj (hf : Integrable f μ) (hf2 : MemLp 
     Integrable (fun χ ↦ fourierIntegral μ f χ * conj (fourierIntegral μ g χ)) μ.dualAddHaar :=
   (memLp_two_fourierIntegral μ hf hf2).integrable_mul (memLp_two_fourierIntegral μ hg hg2).star
 
-/-- For `f` and `g` in `L¹ ∩ L²`, the functional `spectralCLM μ f g` is the integral against
-`fourierIntegral μ f * conj (fourierIntegral μ g)` with respect to the dual Haar measure. -/
-theorem spectralCLM_toLp_toLp (hf : Integrable f μ) (hf2 : MemLp f 2 μ) (hg : Integrable g μ)
-    (hg2 : MemLp g 2 μ) (Φ : C₀(AddPontryaginDual G, ℂ)) :
-    spectralCLM μ (hf2.toLp f) (hg2.toLp g) Φ =
-      ∫ χ, Φ χ * (fourierIntegral μ f χ * conj (fourierIntegral μ g χ)) ∂μ.dualAddHaar := by
-  -- TS II §1 n°3, (16) and (17), for the element `f * g⋆` of `A(G)`. By density, we may assume
-  -- that `Φ = fourierL1 μ φ`. Then the left-hand side is `⟪g, φ ⋆ f⟫`: apply the Parseval formula.
-  refine (denseRange_fourierL1 μ).induction_on Φ (isClosed_eq (spectralCLM μ _ _).continuous
-    (ZeroAtInftyContinuousMap.continuous_integral_mul
-      (integrable_fourierIntegral_mul_conj hf hf2 hg hg2))) fun φ ↦ ?_
-  have hae := L1.coeFn_convL2_toLp φ hf hf2
-  have hh : Integrable (φ * hf.toL1 f : Lp ℂ 1 μ) μ := L1.integrable_coeFn _
-  have hh2 : MemLp (φ * hf.toL1 f : Lp ℂ 1 μ) 2 μ := MemLp.ae_eq hae (Lp.memLp _)
-  have e : L1.convL2 φ (hf2.toLp f) = hh2.toLp _ := Lp.ext (hae.trans hh2.coeFn_toLp.symm)
-  rw [spectralCLM_fourierL1, e, inner_toLp,
-    ← integral_conj_fourierIntegral_mul_fourierIntegral hg hg2 hh hh2]
-  refine integral_congr_ae (.of_forall fun χ ↦ ?_)
-  beta_reduce
-  rw [fourierIntegral_mul, fourierIntegral_congr_ae hf.coeFn_toL1, fourierL1_apply]
-  ring
-
 /-- The **Fourier inversion formula** for the function `f * g⋆ : x ↦ ∫ y, f y * conj (g (-x + y))`,
 where `f` and `g` are in `L¹ ∩ L²`. Its Fourier transform is
 `fourierIntegral μ f * conj (fourierIntegral μ g)`. -/
@@ -384,43 +362,6 @@ theorem fourierIntegralInv_fourierIntegral_mul_conj (hf : Integrable f μ) (hf2 
       integral_conj_fourierIntegral_mul_fourierIntegral hg' hg2' hf hf2
     _ = ∫ y, f y * conj (g (-x + y)) ∂μ :=
       integral_congr_ae (.of_forall fun y ↦ mul_comm _ _)
-
-variable (μ) in
-omit [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)] in
-/-- If `u` is continuous with compact support, then the Fourier transform of
-`x ↦ ∫ y, u y * conj (u (-x + y)) ∂μ` is `χ ↦ fourierIntegral μ u χ * conj (fourierIntegral μ u χ)`.
-This is the Fourier transform of the convolution of `u` and `x ↦ conj (u (-x))`. -/
-theorem fourierIntegral_integral_mul_conj {u : G → ℂ} (hu : Continuous u)
-    (huc : HasCompactSupport u) (χ : AddPontryaginDual G) :
-    fourierIntegral μ (fun x ↦ ∫ y, u y * conj (u (-x + y)) ∂μ) χ =
-      fourierIntegral μ u χ * conj (fourierIntegral μ u χ) := by
-  -- The function is the convolution of `u` and `x ↦ conj (u (-x))`.
-  have hv : Continuous fun x ↦ conj (u (-x)) :=
-    Complex.continuous_conj.comp (hu.comp continuous_neg)
-  have hvc : HasCompactSupport fun x ↦ conj (u (-x)) :=
-    (huc.comp_homeomorph (Homeomorph.neg G)).comp_left (g := conj) (map_zero _)
-  have hae := L1.coeFn_mul_of_hasCompactSupport (μ := μ) hu huc hv hvc
-  have hconv : (u ⋆[.mul ℂ ℂ, μ] fun x ↦ conj (u (-x))) =
-      fun x ↦ ∫ y, u y * conj (u (-x + y)) ∂μ := by
-    ext x
-    simp only [convolution_def, ContinuousLinearMap.mul_apply', sub_eq_neg_add, neg_add_rev,
-      neg_neg]
-  rw [hconv] at hae
-  rw [← fourierIntegral_congr_ae hae, fourierIntegral_mul,
-    fourierIntegral_congr_ae (Integrable.coeFn_toL1 _),
-    fourierIntegral_congr_ae (Integrable.coeFn_toL1 _), fourierIntegral_conj_neg]
-
-/-- The Fourier inversion formula for the function `x ↦ ∫ y, u y * conj (u (-x + y)) ∂μ`, where
-`u` is continuous with compact support. -/
-theorem fourierIntegralInv_fourierIntegral_integral_mul_conj {u : G → ℂ} (hu : Continuous u)
-    (huc : HasCompactSupport u) :
-    fourierIntegralInv μ.dualAddHaar
-      (fourierIntegral μ fun x ↦ ∫ y, u y * conj (u (-x + y)) ∂μ) =
-        fun x ↦ ∫ y, u y * conj (u (-x + y)) ∂μ := by
-  have hui : Integrable u μ := hu.integrable_of_hasCompactSupport huc
-  have hu2 : MemLp u 2 μ := hu.memLp_of_hasCompactSupport huc
-  rw [funext (fourierIntegral_integral_mul_conj μ hu huc)]
-  exact funext (fourierIntegralInv_fourierIntegral_mul_conj hui hu2 hui hu2)
 
 end Inversion
 

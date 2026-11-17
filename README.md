@@ -86,9 +86,6 @@ Reference: Bourbaki, *Théories spectrales*, Chap. I, §6 and Chap. II, §1 (196
 6. **Duality** (`Duality/Basic.lean`). The common argument above. In addition, the dual of the
    dual Haar measure is the image of `μ` under `G ≃ Ĝ^` (`dualAddHaar_dualAddHaar`).
 
-On this branch, `PositiveDefinite/Bochner.lean` still compiles but is not used by the main
-theorem.
-
 ## Building
 
 ```sh

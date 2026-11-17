@@ -18,5 +18,3 @@ public import PontryaginDuality.Mathlib.MeasureTheory.Integral.RieszMarkovKakuta
 public import PontryaginDuality.Mathlib.Topology.Algebra.Group.LocallyCompactSubgroup
 public import PontryaginDuality.Mathlib.Topology.Algebra.PontryaginDual
 public import PontryaginDuality.Mathlib.Topology.ContinuousMap.StoneWeierstrass
-public import PontryaginDuality.PositiveDefinite.Basic
-public import PontryaginDuality.PositiveDefinite.Bochner

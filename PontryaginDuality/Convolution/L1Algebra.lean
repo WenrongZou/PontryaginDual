@@ -198,26 +198,6 @@ theorem exists_nhds_zero_norm_mul_sub_lt (f : Lp 𝕜 1 μ) {ε : ℝ} (hε : 0 
       rw [integral_mul_const, ← L1.norm_eq_integral_norm, hu1, one_mul]
       exact half_lt_self hε
 
-/-- **Approximate units**: for every `f` and `ε > 0`, there is `u` with `‖u‖ = 1` and
-`‖u * f - f‖ < ε`. -/
-theorem exists_norm_eq_one_norm_mul_sub_lt (f : Lp 𝕜 1 μ) {ε : ℝ} (hε : 0 < ε) :
-    ∃ u : Lp 𝕜 1 μ, ‖u‖ = 1 ∧ ‖u * f - f‖ < ε := by
-  -- Take the normalized indicator function of a small compact neighborhood of `0`.
-  obtain ⟨U, hU, h⟩ := exists_nhds_zero_norm_mul_sub_lt f hε
-  obtain ⟨K, ⟨hK0, hK, hK'⟩, hKU⟩ := (isCompact_isClosed_basis_nhds (0 : G)).mem_iff.1 hU
-  have hμK : μ K ≠ ∞ := hK.measure_lt_top.ne
-  have hμK0 : 0 < μ.real K := ENNReal.toReal_pos (measure_pos_of_mem_nhds μ hK0).ne' hμK
-  let u : Lp 𝕜 1 μ := indicatorConstLp 1 hK'.measurableSet hμK ((μ.real K)⁻¹ : 𝕜)
-  have hu : u =ᵐ[μ] K.indicator fun _ ↦ ((μ.real K)⁻¹ : 𝕜) := indicatorConstLp_coeFn
-  have hu1 : ‖u‖ = 1 := by
-    simp [u, norm_indicatorConstLp one_ne_zero ENNReal.one_ne_top, hμK0.ne', abs_of_pos hμK0]
-  refine ⟨u, hu1, h u ?_ hu1 ?_⟩
-  · filter_upwards [hu] with x hx
-    rw [hx]
-    by_cases hxK : x ∈ K <;> simp [hxK, abs_of_pos hμK0]
-  · filter_upwards [hu] with x hx hxU
-    rw [hx, Set.indicator_of_notMem fun hxK ↦ hxU (hKU hxK)]
-
 end AddGroup
 
 section AddCommGroup
