@@ -10,6 +10,9 @@ public import Mathlib.Analysis.Normed.Algebra.Spectrum
 public import Mathlib.Topology.ContinuousMap.ZeroAtInfty
 public import PontryaginDuality.Fourier.CharacterSpace
 
+import PontryaginDuality.Mathlib.MeasureTheory.Function.ContinuousMapDense
+import PontryaginDuality.Mathlib.MeasureTheory.Integral.RieszMarkovKakutani.ZeroAtInfty
+
 import Mathlib.Analysis.CStarAlgebra.GelfandDuality
 import Mathlib.Analysis.Normed.Algebra.UnitizationL1
 import Mathlib.Analysis.Normed.Module.WeakDual
@@ -38,6 +41,8 @@ all follow from the identification of `AddPontryaginDual G` with the character s
   `AddPontryaginDual.spectralRadius_inr_eq_nnnorm_fourierL1`: the (quasi)spectrum of `f : L¹(G)` is
   the range of its Fourier transform together with `0`. Combined with Gelfand's formula, this
   expresses `‖fourierL1 μ f‖` as the limit of `‖f ^ n‖ ^ (1 / n)`.
+* `AddPontryaginDual.ae_eq_zero_of_fourierIntegralInv_eq_zero`: the inverse Fourier transform is
+  injective on `L¹` of the Pontryagin dual.
 -/
 
 @[expose] public section
@@ -224,5 +229,31 @@ theorem spectralRadius_inr_eq_nnnorm_fourierL1 (f : Lp ℂ 1 μ) :
     quasispectrum_eq_insert_zero_range_fourierL1, iSup_insert, iSup_range, nnnorm_zero,
     ENNReal.coe_zero, sup_of_le_right (by simp), ← ENNReal.coe_iSup hbdd]
   exact congrArg _ (fourierL1 μ f).toBCF.nnnorm_eq_iSup_nnnorm.symm
+
+end AddPontryaginDual
+
+namespace AddPontryaginDual
+
+variable {G : Type*} [AddCommGroup G] [TopologicalSpace G] [IsTopologicalAddGroup G]
+  [LocallyCompactSpace G] [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)]
+
+/-- The inverse Fourier transform is injective on `L¹` of the Pontryagin dual. -/
+theorem ae_eq_zero_of_fourierIntegralInv_eq_zero {ν : Measure (AddPontryaginDual G)} [ν.Regular]
+    {F : AddPontryaginDual G → ℂ} (hF : Integrable F ν) (h : fourierIntegralInv ν F = 0) :
+    F =ᵐ[ν] 0 := by
+  -- By the multiplication formula, `∫ χ, Φ χ * F χ ∂ν = 0` for all `Φ` in the range of
+  -- `fourierL1 μ`, hence for all continuous functions `Φ` vanishing at infinity.
+  borelize G
+  let μ : Measure G := Measure.addHaar
+  have h1 (f : Lp ℂ 1 μ) : ∫ χ, fourierL1 μ f χ * F χ ∂ν = 0 := by
+    have := integral_fourierIntegral_mul (ν := ν) (L1.integrable_coeFn f) hF
+    rw [h] at this
+    simpa using this
+  have h2 (Φ : C₀(AddPontryaginDual G, ℂ)) : ∫ χ, Φ χ * F χ ∂ν = 0 :=
+    (denseRange_fourierL1 μ).induction_on Φ
+      (isClosed_eq (ZeroAtInftyContinuousMap.continuous_integral_mul hF) continuous_const) h1
+  refine hF.ae_eq_zero_of_forall_integral_smul_eq_zero fun g hg hgc ↦ ?_
+  simpa using h2 ⟨⟨fun χ ↦ (g χ : ℂ), Complex.continuous_ofReal.comp hg⟩,
+    (hgc.comp_left Complex.ofReal_zero).is_zero_at_infty⟩
 
 end AddPontryaginDual

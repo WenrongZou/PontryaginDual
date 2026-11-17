@@ -1,11 +1,13 @@
 module
 
 public import PontryaginDuality.Convolution.L1Algebra
+public import PontryaginDuality.Convolution.L2
 public import PontryaginDuality.Duality.Basic
 public import PontryaginDuality.Duality.DoubleDual
 public import PontryaginDuality.Duality.Multiplicative
 public import PontryaginDuality.Fourier.AddChar
 public import PontryaginDuality.Fourier.Basic
+public import PontryaginDuality.Fourier.CStar
 public import PontryaginDuality.Fourier.CharacterSpace
 public import PontryaginDuality.Fourier.L1
 public import PontryaginDuality.Inversion.DualHaar

@@ -5,16 +5,17 @@ Authors: Wenrong Zou
 -/
 module
 
-public import PontryaginDuality.PositiveDefinite.Bochner
+public import PontryaginDuality.Fourier.CStar
 
+import PontryaginDuality.Mathlib.MeasureTheory.Function.ContinuousMapDense
 import PontryaginDuality.Mathlib.MeasureTheory.Integral.RieszMarkovKakutani.WithDensity
 
 /-!
-# The dual Haar measure and the Fourier inversion theorem
+# The dual Haar measure
 
 Let `G` be a locally compact abelian group with a regular Haar measure `μ`. In this file we define
-the dual Haar measure `μ.dualAddHaar` on the Pontryagin dual of `G`: it is the unique regular Haar
-measure for which the Fourier inversion formula holds.
+the dual Haar measure `μ.dualAddHaar` on the Pontryagin dual of `G`: it is the regular Haar
+measure for which the Fourier transform preserves the `L²` norm.
 
 ## Main definitions
 
@@ -22,40 +23,39 @@ measure for which the Fourier inversion formula holds.
 
 ## Main statements
 
-Let `f : G → ℂ` be a continuous, integrable and positive definite function.
+Let `f` and `g` be in `L¹ ∩ L²`.
 
-* `AddPontryaginDual.fourierIntegral_nonneg`: the Fourier transform of `f` is nonnegative.
-* `AddPontryaginDual.withDensity_dualAddHaar_enorm_fourierIntegral`: the measure associated with
-  `f` by Bochner's theorem is the measure with density `fourierIntegral μ f` with respect to
-  `μ.dualAddHaar`.
-* `AddPontryaginDual.integrable_fourierIntegral`,
-  `AddPontryaginDual.fourierIntegralInv_fourierIntegral`: the **Fourier inversion theorem**:
-  the Fourier transform of `f` is integrable and
-  `f x = ∫ χ, χ x • fourierIntegral μ f χ ∂μ.dualAddHaar`.
+* `AddPontryaginDual.integral_mul_sq_fourierIntegral_spectralMeasure_comm`: the measures
+  `‖fourierIntegral μ f‖ ^ 2 • spectralMeasure μ g` and
+  `‖fourierIntegral μ g‖ ^ 2 • spectralMeasure μ f` are equal.
+* `AddPontryaginDual.withDensity_dualAddHaar_sq_enorm_fourierIntegral`: the spectral measure of
+  `f` has density `‖fourierIntegral μ f‖ ^ 2` with respect to `μ.dualAddHaar`.
+* `AddPontryaginDual.eLpNorm_two_fourierIntegral`: the Fourier transform preserves the `L²` norm
+  of `f`.
 
 ## Implementation notes
 
-The textbooks state the inversion theorem for the linear span of the continuous positive definite
-functions which are integrable. We only state it for positive definite functions, in order to
-avoid complex measures; the general case follows by linearity.
+We follow [bourbaki1967], Chap. II, §1, n°3. For `f ∈ A(G)`, Bourbaki restricts the bounded
+measure `μ_f` to the open set `Ω_f` where the Fourier transform `Ff` does not vanish. The measures
+`(Ff)⁻¹ • μ_f` on `Ω_f` are compatible and define a measure `ν` on the Pontryagin dual, which is
+invariant under translations; it is positive by the uniqueness of the Haar measure. A measure in
+the sense of Mathlib is positive from the start, hence we only use the functions `f = g * g⋆`,
+for which `μ_f = spectralMeasure μ g` is positive and `Ff = ‖Fg‖ ^ 2`.
 
-The dual Haar measure is defined as the measure associated by the Riesz–Markov–Kakutani theorem
-(`RealRMK.rieszMeasure`) with the positive linear functional
-`ψ ↦ ∫ χ, ψ χ / fourierIntegral μ f χ ∂bochnerMeasure f`, where `f` is any continuous, integrable
-and positive definite function whose Fourier transform is nonnegative and does not vanish on the
-support of `ψ`. The value does not depend on `f`, by
-`AddPontryaginDual.integral_mul_fourierIntegral_bochnerMeasure_comm`.
+As on the `main` branch, the measure is defined by the Riesz–Markov–Kakutani theorem
+(`RealRMK.rieszMeasure`), applied to the positive linear functional
+`ψ ↦ ∫ χ, ψ χ / ‖fourierIntegral μ g χ‖ ^ 2 ∂spectralMeasure μ g`, where `g` is any continuous
+function with compact support whose Fourier transform does not vanish on the support of `ψ`.
 
 ## References
 
-* [G. B. Folland, *A Course in Abstract Harmonic Analysis*, Section 4.2][folland2016]
-* [W. Rudin, *Fourier Analysis on Groups*, Section 1.5][rudin1962]
+* [N. Bourbaki, *Théories spectrales*, Chap. II, §1, n°3][bourbaki1967]
 -/
 
 @[expose] public section
 
 open MeasureTheory Measure Filter Topology
-open scoped ComplexOrder ComplexConjugate ENNReal NNReal ZeroAtInfty CompactlySupported Convolution
+open scoped ComplexConjugate ENNReal NNReal ZeroAtInfty CompactlySupported
 
 namespace AddPontryaginDual
 
@@ -64,71 +64,53 @@ variable {G : Type*} [AddCommGroup G] [TopologicalSpace G] [IsTopologicalAddGrou
   [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)]
   (μ : Measure G) [μ.IsAddHaarMeasure] [μ.Regular]
 
-omit [μ.IsAddHaarMeasure] in
-private theorem integrable_fourierIntegral_of_isFiniteMeasure {f : G → ℂ} (hf : Integrable f μ)
-    (ν : Measure (AddPontryaginDual G)) [IsFiniteMeasure ν] : Integrable (fourierIntegral μ f) ν :=
-  .of_bound (continuous_fourierIntegral hf).aestronglyMeasurable (∫ x, ‖f x‖ ∂μ)
-    (.of_forall (norm_fourierIntegral_le_integral_norm μ f))
+omit [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)] in
+/-- For every compact subset `K` of the Pontryagin dual, there is a continuous function with
+compact support whose Fourier transform does not vanish on `K`. -/
+theorem exists_hasCompactSupport_fourierIntegral_ne_zero {K : Set (AddPontryaginDual G)}
+    (hK : IsCompact K) :
+    ∃ g : G → ℂ, Continuous g ∧ HasCompactSupport g ∧ ∀ χ ∈ K, fourierIntegral μ g χ ≠ 0 := by
+  -- TS II §1 n°3, Lemme 1 (ii): there is `φ ∈ L¹(G)` such that `‖fourierL1 μ φ χ - 1‖ < 1 / 2` for
+  -- all `χ ∈ K`. Approximate `φ` in `L¹(G)` by a continuous function with compact support.
+  obtain ⟨φ, -, hφ, -⟩ := exists_fourierL1_sub_one_lt_convL2_sub_lt μ hK 0 (half_pos one_pos)
+  obtain ⟨g, hgc, hφg, hg, hg1⟩ := MemLp.exists_hasCompactSupport_eLpNorm_sub_le'
+    ENNReal.one_ne_top (Lp.memLp φ) (ε := ENNReal.ofReal (1 / 2)) (by simp)
+  have hgi : Integrable g μ := memLp_one_iff_integrable.1 hg1
+  have hi : Integrable (⇑φ - g) μ := (L1.integrable_coeFn φ).sub hgi
+  refine ⟨g, hg, hgc, fun χ hχ h0 ↦ ?_⟩
+  have h1 : ‖fourierL1 μ φ χ - fourierIntegral μ g χ‖ ≤ 1 / 2 := by
+    have e : fourierL1 μ φ χ - fourierIntegral μ g χ = fourierIntegral μ (⇑φ - g) χ := by
+      rw [fourierL1_apply, fourierIntegral_apply, fourierIntegral_apply, fourierIntegral_apply,
+        ← integral_sub ((fourierIntegral_convergent_iff χ).2 (L1.integrable_coeFn φ))
+          ((fourierIntegral_convergent_iff χ).2 hgi)]
+      simp only [Pi.sub_apply, smul_sub]
+    rw [e]
+    refine (norm_fourierIntegral_le_integral_norm μ _ χ).trans ?_
+    have h := ENNReal.toReal_mono ENNReal.ofReal_ne_top hφg
+    rwa [eLpNorm_one_eq_lintegral_enorm hi.1, ← integral_norm_eq_lintegral_enorm hi.1,
+      ENNReal.toReal_ofReal (by norm_num)] at h
+  have h2 := hφ χ hχ
+  rw [h0, sub_zero] at h1
+  have := norm_sub_norm_le (1 : ℂ) (1 - fourierL1 μ φ χ)
+  rw [sub_sub_cancel, norm_one, norm_sub_rev] at this
+  linarith
 
-omit [μ.IsAddHaarMeasure] in
-/-- The integral of the Fourier transform of `h` against the measure associated with `φ`. -/
-private theorem integral_fourierIntegral_bochnerMeasure {φ h : G → ℂ} (hφ : IsPositiveDefinite φ)
-    (hφc : Continuous φ) (hh : Integrable h μ) :
-    ∫ χ, fourierIntegral μ h χ ∂bochnerMeasure φ = ∫ x, h x * φ (-x) ∂μ := by
-  simpa [fourierIntegralInv, Circle.smul_def, integral_toAddChar_bochnerMeasure hφ hφc] using
-    integral_fourierIntegral_mul (ν := bochnerMeasure φ) hh (integrable_const (1 : ℂ))
-
-private theorem integral_fourierIntegral_mul_fourierIntegral_bochnerMeasure {φ ψ h : G → ℂ}
-    (hφ : IsPositiveDefinite φ) (hφc : Continuous φ) (hψ : Integrable ψ μ) (hh : Integrable h μ) :
-    ∫ χ, fourierIntegral μ h χ * fourierIntegral μ ψ χ ∂bochnerMeasure φ =
-      ∫ x, h x * ∫ y, ψ (-x + y) * φ (-y) ∂μ ∂μ := by
-  rw [integral_fourierIntegral_mul hh (integrable_fourierIntegral_of_isFiniteMeasure μ hψ _)]
-  refine integral_congr_ae (.of_forall fun x ↦ ?_)
-  have := integral_fourierIntegral_bochnerMeasure μ hφ hφc (hψ.comp_add_left (-x))
-  beta_reduce
-  rw [fourierIntegralInv_apply, ← this]
-  simp_rw [fourierIntegral_comp_add_left]
-
-/-- If `f` and `g` are continuous, integrable and positive definite, then the measures
-`fourierIntegral μ f • bochnerMeasure g` and `fourierIntegral μ g • bochnerMeasure f` are
-equal. -/
-theorem integral_mul_fourierIntegral_bochnerMeasure_comm {f g : G → ℂ}
-    (hf : Continuous f) (hfi : Integrable f μ) (hfp : IsPositiveDefinite f)
-    (hg : Continuous g) (hgi : Integrable g μ) (hgp : IsPositiveDefinite g)
-    {Ψ : AddPontryaginDual G → ℂ} (hΨ : Continuous Ψ) (hΨ' : HasCompactSupport Ψ) :
-    ∫ χ, Ψ χ * fourierIntegral μ f χ ∂bochnerMeasure g =
-      ∫ χ, Ψ χ * fourierIntegral μ g χ ∂bochnerMeasure f := by
-  -- For `h` integrable, both `∫ χ, fourierIntegral μ h χ * fourierIntegral μ f χ ∂bochnerMeasure g`
-  -- and the same expression with `f` and `g` exchanged are equal to
-  -- `∫ x, h x * ∫ y, f (-x + y) * g (-y) ∂μ ∂μ`, by the commutativity of the convolution.
-  have hconv (x : G) : ∫ y, f (-x + y) * g (-y) ∂μ = ∫ y, g (-x + y) * f (-y) ∂μ := by
-    rw [← integral_add_left_eq_self (fun y ↦ g (-x + y) * f (-y)) x,
-      ← integral_neg_eq_self (fun y ↦ g (-x + (x + y)) * f (-(x + y))) μ]
-    refine integral_congr_ae (.of_forall fun y ↦ ?_)
-    beta_reduce
-    rw [neg_add_cancel_left, neg_add, neg_neg, mul_comm]
-  have key (h : G → ℂ) (hh : Integrable h μ) :
-      ∫ χ, fourierIntegral μ h χ * fourierIntegral μ f χ ∂bochnerMeasure g =
-        ∫ χ, fourierIntegral μ h χ * fourierIntegral μ g χ ∂bochnerMeasure f := by
-    rw [integral_fourierIntegral_mul_fourierIntegral_bochnerMeasure μ hgp hg hfi hh,
-      integral_fourierIntegral_mul_fourierIntegral_bochnerMeasure μ hfp hf hgi hh]
-    simp_rw [hconv]
-  -- Conclude by `denseRange_fourierL1`.
-  have key' (Φ : C₀(AddPontryaginDual G, ℂ)) :
-      ∫ χ, Φ χ * fourierIntegral μ f χ ∂bochnerMeasure g =
-        ∫ χ, Φ χ * fourierIntegral μ g χ ∂bochnerMeasure f :=
-    (denseRange_fourierL1 μ).induction_on Φ (isClosed_eq
-      (ZeroAtInftyContinuousMap.continuous_integral_mul
-        (integrable_fourierIntegral_of_isFiniteMeasure μ hfi _))
-      (ZeroAtInftyContinuousMap.continuous_integral_mul
-        (integrable_fourierIntegral_of_isFiniteMeasure μ hgi _)))
-      fun h ↦ key h (L1.integrable_coeFn h)
-  exact key' ⟨⟨Ψ, hΨ⟩, hΨ'.is_zero_at_infty⟩
-
-/-! ### Auxiliary functions
-
-To construct the dual Haar measure, we use the continuous, integrable and positive definite
-functions whose Fourier transform is nonnegative and does not vanish on a given compact set. -/
+/-- For `f` and `g` in `L¹ ∩ L²`, the measures `‖fourierIntegral μ f‖ ^ 2 • spectralMeasure μ g` and
+`‖fourierIntegral μ g‖ ^ 2 • spectralMeasure μ f` are equal. -/
+theorem integral_mul_sq_fourierIntegral_spectralMeasure_comm {f g : G → ℂ} (hf : Integrable f μ)
+    (hf2 : MemLp f 2 μ) (hg : Integrable g μ) (hg2 : MemLp g 2 μ)
+    (Φ : C₀(AddPontryaginDual G, ℂ)) :
+    ∫ χ, Φ χ * ‖fourierIntegral μ f χ‖ ^ 2 ∂spectralMeasure μ (hg2.toLp g) =
+      ∫ χ, Φ χ * ‖fourierIntegral μ g χ‖ ^ 2 ∂spectralMeasure μ (hf2.toLp f) := by
+  -- TS II §1 n°3, (15): `Ff • μ_g = Fg • μ_f`. Both sides are the integral of `Φ` against the
+  -- spectral measure of `f ⋆ g = g ⋆ f`.
+  have e {h : G → ℂ} (hh : Integrable h μ) (χ : AddPontryaginDual G) :
+      fourierL1 μ (hh.toL1 h) χ = fourierIntegral μ h χ :=
+    congr_fun (fourierIntegral_congr_ae hh.coeFn_toL1) χ
+  have h1 := integral_spectralMeasure_convL2 μ (hf.toL1 f) (hg2.toLp g) Φ
+  have h2 := integral_spectralMeasure_convL2 μ (hg.toL1 g) (hf2.toLp f) Φ
+  simp_rw [e] at h1 h2
+  rw [← h1, ← h2, L1.convL2_toL1_toLp_comm hf hf2 hg hg2]
 
 private theorem tsupport_div_subset {X : Type*} [TopologicalSpace X] (ψ d : X → ℝ) :
     tsupport (fun x ↦ ψ x / d x) ⊆ tsupport ψ := by
@@ -139,292 +121,155 @@ private theorem hasCompactSupport_div {X : Type*} [TopologicalSpace X] {ψ : X �
     (hψ : HasCompactSupport ψ) (d : X → ℝ) : HasCompactSupport fun x ↦ ψ x / d x :=
   hψ.mono fun x hx h0 ↦ hx (by simp [h0])
 
-/-- A continuous, integrable and positive definite function `f` whose Fourier transform is
-nonnegative and does not vanish on the set `K`. -/
-private structure IsGood (f : G → ℂ) (K : Set (AddPontryaginDual G)) : Prop where
-  continuous : Continuous f
-  integrable : Integrable f μ
-  isPositiveDefinite : IsPositiveDefinite f
-  nonneg : ∀ χ, 0 ≤ fourierIntegral μ f χ
-  ne_zero : ∀ χ ∈ K, fourierIntegral μ f χ ≠ 0
+section
 
-namespace IsGood
-
-variable {μ} {f g : G → ℂ} {K L : Set (AddPontryaginDual G)}
-
-omit [IsTopologicalAddGroup G] [LocallyCompactSpace G] [BorelSpace G]
-  [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)] [μ.IsAddHaarMeasure]
-  [μ.Regular] in
-private theorem mono (hf : IsGood μ f K) (h : L ⊆ K) : IsGood μ f L :=
-  { hf with ne_zero := fun χ hχ ↦ hf.ne_zero χ (h hχ) }
-
-omit [IsTopologicalAddGroup G] [LocallyCompactSpace G] [BorelSpace G]
-  [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)] [μ.IsAddHaarMeasure]
-  [μ.Regular] in
-private theorem zero : IsGood μ (0 : G → ℂ) ∅ where
-  continuous := continuous_zero
-  integrable := integrable_zero _ _ _
-  isPositiveDefinite := .zero
-  nonneg χ := by simp [fourierIntegral]
-  ne_zero χ hχ := hχ.elim
-
-omit [LocallyCompactSpace G] [MeasurableSpace (AddPontryaginDual G)]
-  [BorelSpace (AddPontryaginDual G)] [μ.IsAddHaarMeasure] [μ.Regular] in
-private theorem add (hf : IsGood μ f K) (hg : IsGood μ g L) : IsGood μ (f + g) (K ∪ L) where
-  continuous := hf.continuous.add hg.continuous
-  integrable := hf.integrable.add hg.integrable
-  isPositiveDefinite := hf.isPositiveDefinite.add hg.isPositiveDefinite
-  nonneg χ := by
-    rw [fourierIntegral_add hf.integrable hg.integrable]
-    exact add_nonneg (hf.nonneg χ) (hg.nonneg χ)
-  ne_zero χ hχ := by
-    rw [fourierIntegral_add hf.integrable hg.integrable]
-    rcases hχ with hχ | hχ
-    · exact (add_pos_of_pos_of_nonneg ((hf.nonneg χ).lt_of_ne' (hf.ne_zero χ hχ))
-        (hg.nonneg χ)).ne'
-    · exact (add_pos_of_nonneg_of_pos (hf.nonneg χ)
-        ((hg.nonneg χ).lt_of_ne' (hg.ne_zero χ hχ))).ne'
-
-omit [IsTopologicalAddGroup G] [LocallyCompactSpace G] [MeasurableSpace (AddPontryaginDual G)]
-  [BorelSpace (AddPontryaginDual G)] [μ.IsAddHaarMeasure] [μ.Regular] in
-/-- Multiplying by a character translates the Fourier transform. -/
-private theorem toAddChar_smul (hf : IsGood μ f K) (η : AddPontryaginDual G) :
-    IsGood μ (fun x ↦ η.toAddChar x • f x) {χ | χ - η ∈ K} where
-  continuous := η.continuous_toAddChar.smul hf.continuous
-  integrable := by
-    have hc : Continuous fun x ↦ η.toAddChar x := η.continuous_toAddChar
-    simp_rw [← integrable_norm_iff (hc.aestronglyMeasurable.fun_smul hf.integrable.1),
-      Circle.norm_smul]
-    exact hf.integrable.norm
-  isPositiveDefinite := (isPositiveDefinite_toAddChar η).mul hf.isPositiveDefinite
-  nonneg χ := by
-    rw [fourierIntegral_toAddChar_smul]
-    exact hf.nonneg _
-  ne_zero χ hχ := by
-    rw [fourierIntegral_toAddChar_smul]
-    exact hf.ne_zero _ hχ
+variable {μ} {f g : G → ℂ} {ψ : AddPontryaginDual G → ℝ}
 
 omit [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)]
   [μ.IsAddHaarMeasure] in
-private theorem continuous_div (hf : IsGood μ f K) {ψ : AddPontryaginDual G → ℝ}
-    (hψ : Continuous ψ) (hψK : tsupport ψ ⊆ K) :
-    Continuous fun χ ↦ ψ χ / ‖fourierIntegral μ f χ‖ :=
+private theorem continuous_div_sq_norm_fourierIntegral (hg : Integrable g μ) (hψ : Continuous ψ)
+    (hgψ : ∀ χ ∈ tsupport ψ, fourierIntegral μ g χ ≠ 0) :
+    Continuous fun χ ↦ ψ χ / ‖fourierIntegral μ g χ‖ ^ 2 :=
   continuous_of_tsupport fun χ hχ ↦
-    hψ.continuousAt.div (continuous_fourierIntegral hf.integrable).norm.continuousAt
-      (norm_ne_zero_iff.2 (hf.ne_zero χ (hψK (tsupport_div_subset _ _ hχ))))
-
-omit [μ.IsAddHaarMeasure] in
-private theorem integrable_div (hf : IsGood μ f K) {ψ : AddPontryaginDual G → ℝ}
-    (hψ : Continuous ψ) (hψc : HasCompactSupport ψ) (hψK : tsupport ψ ⊆ K) :
-    Integrable (fun χ ↦ ψ χ / ‖fourierIntegral μ f χ‖) (bochnerMeasure f) :=
-  (hf.continuous_div hψ hψK).integrable_of_hasCompactSupport (hasCompactSupport_div hψc _)
+    hψ.continuousAt.div ((continuous_fourierIntegral hg).norm.pow 2).continuousAt
+      (pow_ne_zero 2 (norm_ne_zero_iff.2 (hgψ χ (tsupport_div_subset _ _ hχ))))
 
 omit [IsTopologicalAddGroup G] [LocallyCompactSpace G] [BorelSpace G]
   [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)] [μ.IsAddHaarMeasure]
   [μ.Regular] in
-private theorem ofReal_div_mul (hf : IsGood μ f K) {ψ : AddPontryaginDual G → ℝ}
-    (hψK : tsupport ψ ⊆ K) (χ : AddPontryaginDual G) :
-    ((ψ χ / ‖fourierIntegral μ f χ‖ : ℝ) : ℂ) * fourierIntegral μ f χ = ψ χ := by
-  by_cases h0 : fourierIntegral μ f χ = 0
-  · have : ψ χ = 0 := image_eq_zero_of_notMem_tsupport fun h ↦ hf.ne_zero χ (hψK h) h0
+private theorem ofReal_div_sq_mul_sq (hgψ : ∀ χ ∈ tsupport ψ, fourierIntegral μ g χ ≠ 0)
+    (χ : AddPontryaginDual G) :
+    ((ψ χ / ‖fourierIntegral μ g χ‖ ^ 2 : ℝ) : ℂ) * ‖fourierIntegral μ g χ‖ ^ 2 = ψ χ := by
+  by_cases h0 : fourierIntegral μ g χ = 0
+  · have : ψ χ = 0 := image_eq_zero_of_notMem_tsupport fun h ↦ hgψ χ h h0
     simp [this]
-  · rw [Complex.ofReal_div, ← Complex.eq_coe_norm_of_nonneg (hf.nonneg χ), div_mul_cancel₀ _ h0]
+  · have : (‖fourierIntegral μ g χ‖ : ℂ) ^ 2 ≠ 0 := pow_ne_zero 2 (by simpa using h0)
+    rw [Complex.ofReal_div, Complex.ofReal_pow, div_mul_cancel₀ _ this]
 
-/-- The integral of `ψ / fourierIntegral μ f` against `bochnerMeasure f` does not depend on `f`. -/
-private theorem integral_div_eq (hf : IsGood μ f K) (hg : IsGood μ g K)
-    {ψ : AddPontryaginDual G → ℝ} (hψ : Continuous ψ) (hψc : HasCompactSupport ψ)
-    (hψK : tsupport ψ ⊆ K) :
-    ∫ χ, ψ χ / ‖fourierIntegral μ f χ‖ ∂bochnerMeasure f =
-      ∫ χ, ψ χ / ‖fourierIntegral μ g χ‖ ∂bochnerMeasure g := by
-  have hK₁ : tsupport (fun χ ↦ ψ χ / ‖fourierIntegral μ f χ‖) ⊆ K :=
-    (tsupport_div_subset _ _).trans hψK
-  have hK₂ : tsupport (fun χ ↦ ψ χ / ‖fourierIntegral μ g χ‖) ⊆ K :=
-    (tsupport_div_subset _ _).trans hψK
+/-- The measures `(Ff)⁻¹ • μ_f` and `(Fg)⁻¹ • μ_g` of Bourbaki coincide on `Ω_f ∩ Ω_g`. -/
+private theorem integral_div_sq_spectralMeasure_eq (hf : Integrable f μ) (hf2 : MemLp f 2 μ)
+    (hg : Integrable g μ) (hg2 : MemLp g 2 μ) (hψ : Continuous ψ) (hψc : HasCompactSupport ψ)
+    (hfψ : ∀ χ ∈ tsupport ψ, fourierIntegral μ f χ ≠ 0)
+    (hgψ : ∀ χ ∈ tsupport ψ, fourierIntegral μ g χ ≠ 0) :
+    ∫ χ, ψ χ / ‖fourierIntegral μ f χ‖ ^ 2 ∂spectralMeasure μ (hf2.toLp f) =
+      ∫ χ, ψ χ / ‖fourierIntegral μ g χ‖ ^ 2 ∂spectralMeasure μ (hg2.toLp g) := by
+  -- Apply `integral_mul_sq_fourierIntegral_spectralMeasure_comm` to
+  -- `Φ = ψ / (‖Ff‖ ^ 2 * ‖Fg‖ ^ 2)`.
+  have hK₁ : ∀ χ ∈ tsupport (fun χ ↦ ψ χ / ‖fourierIntegral μ f χ‖ ^ 2),
+      fourierIntegral μ g χ ≠ 0 := fun χ hχ ↦ hgψ χ (tsupport_div_subset _ _ hχ)
+  have hK₂ : ∀ χ ∈ tsupport (fun χ ↦ ψ χ / ‖fourierIntegral μ g χ‖ ^ 2),
+      fourierIntegral μ f χ ≠ 0 := fun χ hχ ↦ hfψ χ (tsupport_div_subset _ _ hχ)
   have hΨ : Continuous fun χ ↦
-      ((ψ χ / ‖fourierIntegral μ f χ‖ / ‖fourierIntegral μ g χ‖ : ℝ) : ℂ) :=
-    Complex.continuous_ofReal.comp (hg.continuous_div (hf.continuous_div hψ hψK) hK₁)
+      ((ψ χ / ‖fourierIntegral μ f χ‖ ^ 2 / ‖fourierIntegral μ g χ‖ ^ 2 : ℝ) : ℂ) :=
+    Complex.continuous_ofReal.comp (continuous_div_sq_norm_fourierIntegral hg
+      (continuous_div_sq_norm_fourierIntegral hf hψ hfψ) hK₁)
   have hΨc : HasCompactSupport fun χ ↦
-      ((ψ χ / ‖fourierIntegral μ f χ‖ / ‖fourierIntegral μ g χ‖ : ℝ) : ℂ) :=
+      ((ψ χ / ‖fourierIntegral μ f χ‖ ^ 2 / ‖fourierIntegral μ g χ‖ ^ 2 : ℝ) : ℂ) :=
     (hasCompactSupport_div (hasCompactSupport_div hψc _) _).comp_left Complex.ofReal_zero
   refine Complex.ofReal_injective ?_
   rw [← integral_complex_ofReal, ← integral_complex_ofReal]
-  calc ∫ χ, ((ψ χ / ‖fourierIntegral μ f χ‖ : ℝ) : ℂ) ∂bochnerMeasure f
-    _ = ∫ χ, ((ψ χ / ‖fourierIntegral μ f χ‖ / ‖fourierIntegral μ g χ‖ : ℝ) : ℂ) *
-          fourierIntegral μ g χ ∂bochnerMeasure f :=
-      integral_congr_ae (.of_forall fun χ ↦ (hg.ofReal_div_mul hK₁ χ).symm)
-    _ = ∫ χ, ((ψ χ / ‖fourierIntegral μ f χ‖ / ‖fourierIntegral μ g χ‖ : ℝ) : ℂ) *
-          fourierIntegral μ f χ ∂bochnerMeasure g :=
-      integral_mul_fourierIntegral_bochnerMeasure_comm μ hg.continuous hg.integrable
-        hg.isPositiveDefinite hf.continuous hf.integrable hf.isPositiveDefinite hΨ hΨc
-    _ = ∫ χ, ((ψ χ / ‖fourierIntegral μ g χ‖ : ℝ) : ℂ) ∂bochnerMeasure g :=
+  calc ∫ χ, ((ψ χ / ‖fourierIntegral μ f χ‖ ^ 2 : ℝ) : ℂ) ∂spectralMeasure μ (hf2.toLp f)
+    _ = ∫ χ, ((ψ χ / ‖fourierIntegral μ f χ‖ ^ 2 / ‖fourierIntegral μ g χ‖ ^ 2 : ℝ) : ℂ) *
+          ‖fourierIntegral μ g χ‖ ^ 2 ∂spectralMeasure μ (hf2.toLp f) :=
+      integral_congr_ae (.of_forall fun χ ↦ (ofReal_div_sq_mul_sq hK₁ χ).symm)
+    _ = ∫ χ, ((ψ χ / ‖fourierIntegral μ f χ‖ ^ 2 / ‖fourierIntegral μ g χ‖ ^ 2 : ℝ) : ℂ) *
+          ‖fourierIntegral μ f χ‖ ^ 2 ∂spectralMeasure μ (hg2.toLp g) :=
+      integral_mul_sq_fourierIntegral_spectralMeasure_comm μ hg hg2 hf hf2
+        ⟨⟨_, hΨ⟩, hΨc.is_zero_at_infty⟩
+    _ = ∫ χ, ((ψ χ / ‖fourierIntegral μ g χ‖ ^ 2 : ℝ) : ℂ) ∂spectralMeasure μ (hg2.toLp g) :=
       integral_congr_ae (.of_forall fun χ ↦ by
         beta_reduce
         rw [div_right_comm]
-        exact hf.ofReal_div_mul hK₂ χ)
+        exact ofReal_div_sq_mul_sq hK₂ χ)
 
-end IsGood
-
-omit [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)] in
-/-- If `u` is continuous with compact support, then the Fourier transform of
-`x ↦ ∫ y, u y * conj (u (-x + y)) ∂μ` is `χ ↦ fourierIntegral μ u χ * conj (fourierIntegral μ u χ)`.
-This is the Fourier transform of the convolution of `u` and `x ↦ conj (u (-x))`. -/
-theorem fourierIntegral_integral_mul_conj {u : G → ℂ} (hu : Continuous u)
-    (huc : HasCompactSupport u) (χ : AddPontryaginDual G) :
-    fourierIntegral μ (fun x ↦ ∫ y, u y * conj (u (-x + y)) ∂μ) χ =
-      fourierIntegral μ u χ * conj (fourierIntegral μ u χ) := by
-  -- The function is the convolution of `u` and `x ↦ conj (u (-x))`.
-  have hv : Continuous fun x ↦ conj (u (-x)) :=
-    Complex.continuous_conj.comp (hu.comp continuous_neg)
-  have hvc : HasCompactSupport fun x ↦ conj (u (-x)) :=
-    (huc.comp_homeomorph (Homeomorph.neg G)).comp_left (g := conj) (map_zero _)
-  have hae := L1.coeFn_mul_of_hasCompactSupport (μ := μ) hu huc hv hvc
-  have hconv : (u ⋆[.mul ℂ ℂ, μ] fun x ↦ conj (u (-x))) =
-      fun x ↦ ∫ y, u y * conj (u (-x + y)) ∂μ := by
-    ext x
-    simp only [convolution_def, ContinuousLinearMap.mul_apply', sub_eq_neg_add, neg_add_rev,
-      neg_neg]
-  rw [hconv] at hae
-  rw [← fourierIntegral_congr_ae hae, fourierIntegral_mul,
-    fourierIntegral_congr_ae (Integrable.coeFn_toL1 _),
-    fourierIntegral_congr_ae (Integrable.coeFn_toL1 _), fourierIntegral_conj_neg]
-
-omit [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)] in
-private theorem exists_isGood_fourierIntegral_ne_zero (χ₀ : AddPontryaginDual G) :
-    ∃ f : G → ℂ, IsGood μ f ∅ ∧ fourierIntegral μ f χ₀ ≠ 0 := by
-  -- Take `f x = ∫ y, u y * conj (u (-x + y)) ∂μ`, where `u = χ₀ • θ` and `θ` is a nonzero
-  -- nonnegative continuous function with compact support.
-  obtain ⟨θ, hθ1, -, hθc, hθ01⟩ := exists_continuous_one_zero_of_isCompact
-    (isCompact_singleton (x := (0 : G))) isClosed_empty (Set.disjoint_empty _)
-  have hpos : 0 < ∫ x, θ x ∂μ :=
-    Continuous.integral_pos_of_hasCompactSupport_nonneg_ne_zero (x := 0) θ.continuous hθc
-      (fun x ↦ (hθ01 x).1) (by simp [hθ1 (Set.mem_singleton 0)])
-  have hu : Continuous fun x ↦ χ₀.toAddChar x • (θ x : ℂ) :=
-    χ₀.continuous_toAddChar.smul (Complex.continuous_ofReal.comp θ.continuous)
-  have huc : HasCompactSupport fun x ↦ χ₀.toAddChar x • (θ x : ℂ) :=
-    (hθc.comp_left Complex.ofReal_zero).smul_left
-  have hu0 : fourierIntegral μ (fun x ↦ χ₀.toAddChar x • (θ x : ℂ)) χ₀ ≠ 0 := by
-    have : fourierIntegral μ (fun x ↦ (θ x : ℂ)) 0 = ((∫ x, θ x ∂μ : ℝ) : ℂ) := by
-      simp [fourierIntegral, integral_complex_ofReal]
-    rw [fourierIntegral_toAddChar_smul, sub_self, this]
-    exact_mod_cast hpos.ne'
-  have hu2 : MemLp (fun x ↦ χ₀.toAddChar x • (θ x : ℂ)) 2 μ := hu.memLp_of_hasCompactSupport huc
-  refine ⟨_, ⟨continuous_integral_mul_conj hu2,
-    (continuous_integral_mul_conj hu2).integrable_of_hasCompactSupport
-      (hasCompactSupport_integral_mul_conj huc),
-    isPositiveDefinite_integral_mul_conj hu2, fun χ ↦ ?_, fun χ hχ ↦ hχ.elim⟩, ?_⟩
-  · rw [fourierIntegral_integral_mul_conj μ hu huc]
-    exact mul_star_self_nonneg _
-  · rw [fourierIntegral_integral_mul_conj μ hu huc]
-    exact mul_ne_zero hu0 ((map_ne_zero _).2 hu0)
-
-omit [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)] in
-private theorem exists_isGood {K : Set (AddPontryaginDual G)} (hK : IsCompact K) :
-    ∃ f : G → ℂ, IsGood μ f K := by
-  refine hK.induction_on (p := fun K ↦ ∃ f : G → ℂ, IsGood μ f K) ⟨0, .zero⟩
-    (fun s t hst ⟨f, hf⟩ ↦ ⟨f, hf.mono hst⟩) (fun s t ⟨f, hf⟩ ⟨g, hg⟩ ↦ ⟨f + g, hf.add hg⟩)
-    fun χ₀ _ ↦ ?_
-  obtain ⟨f, hf, hfχ⟩ := exists_isGood_fourierIntegral_ne_zero μ χ₀
-  exact ⟨{χ | fourierIntegral μ f χ ≠ 0}, mem_nhdsWithin_of_mem_nhds
-    ((isOpen_ne_fun (continuous_fourierIntegral hf.integrable) continuous_const).mem_nhds hfχ),
-    f, { hf with ne_zero := fun χ hχ ↦ hχ }⟩
-
-omit [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)] in
-/-- For every compact subset `K` of the Pontryagin dual, there is a continuous, integrable and
-positive definite function whose Fourier transform does not vanish on `K`. -/
-theorem exists_fourierIntegral_ne_zero_of_isCompact {K : Set (AddPontryaginDual G)}
-    (hK : IsCompact K) :
-    ∃ f : G → ℂ, Continuous f ∧ Integrable f μ ∧ IsPositiveDefinite f ∧
-      ∀ χ ∈ K, fourierIntegral μ f χ ≠ 0 :=
-  let ⟨f, hf⟩ := exists_isGood μ hK
-  ⟨f, hf.continuous, hf.integrable, hf.isPositiveDefinite, hf.ne_zero⟩
-
-omit [MeasurableSpace G] [BorelSpace G] in
-/-- Multiplying a positive definite function by a character translates the associated measure. -/
-private theorem bochnerMeasure_toAddChar_smul {f : G → ℂ} (hfp : IsPositiveDefinite f)
-    (hf : Continuous f) (η : AddPontryaginDual G) :
-    bochnerMeasure (fun x ↦ η.toAddChar x • f x) = Measure.map (η + ·) (bochnerMeasure f) := by
-  have : (Measure.map (η + ·) (bochnerMeasure f)).Regular := Regular.map (Homeomorph.addLeft η)
-  refine (eq_bochnerMeasure fun x ↦ ?_).symm
-  rw [(measurableEmbedding_addLeft η).integral_map]
-  simp_rw [toAddChar_add_apply, Circle.coe_mul, integral_const_mul,
-    integral_toAddChar_bochnerMeasure hfp hf, Circle.smul_def, smul_eq_mul]
-
-/-- If `∫ x, ψ x * s x ∂ν` is nonnegative for all nonnegative continuous functions `ψ` with
-compact support, then the continuous function `s` is nonnegative. -/
-private theorem nonneg_of_forall_integral_mul_nonneg {X : Type*} [TopologicalSpace X] [T2Space X]
-    [LocallyCompactSpace X] [MeasurableSpace X] [BorelSpace X] {ν : Measure X}
-    [IsFiniteMeasureOnCompacts ν] [ν.IsOpenPosMeasure] {s : X → ℝ} (hs : Continuous s)
-    (h : ∀ ψ : X → ℝ, Continuous ψ → HasCompactSupport ψ → (∀ x, 0 ≤ ψ x) →
-      0 ≤ ∫ x, ψ x * s x ∂ν) (x : X) : 0 ≤ s x := by
-  by_contra! hx
-  obtain ⟨θ, hθ1, hθ0, hθc, hθ01⟩ := exists_continuous_one_zero_of_isCompact
-    (isCompact_singleton (x := x)) (isOpen_lt hs continuous_const).isClosed_compl
-    (Set.disjoint_singleton_left.2 fun h ↦ h hx)
-  have hle (y : X) : 0 ≤ θ y * -s y := by
-    by_cases hy : s y < 0
-    · exact mul_nonneg (hθ01 y).1 (neg_nonneg.2 hy.le)
-    · simp [hθ0 hy]
-  have hpos : 0 < ∫ y, θ y * -s y ∂ν :=
-    Continuous.integral_pos_of_hasCompactSupport_nonneg_ne_zero (x := x)
-      (θ.continuous.mul hs.neg) hθc.mul_right hle
-      (by simpa [hθ1 (Set.mem_singleton x)] using hx.ne)
-  have := h θ θ.continuous hθc fun y ↦ (hθ01 y).1
-  simp only [mul_neg, integral_neg] at hpos
-  linarith
+end
 
 /-! ### The dual Haar measure -/
 
-/-- A continuous, integrable and positive definite function whose Fourier transform is nonnegative
-and does not vanish on the support of `ψ`. -/
+/-- A continuous function with compact support whose Fourier transform does not vanish on the
+support of `ψ`. -/
 private noncomputable def auxFun (ψ : C_c(AddPontryaginDual G, ℝ)) : G → ℂ :=
-  (exists_isGood μ ψ.hasCompactSupport.isCompact).choose
+  (exists_hasCompactSupport_fourierIntegral_ne_zero μ ψ.hasCompactSupport.isCompact).choose
 
 omit [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)] in
-private theorem isGood_auxFun (ψ : C_c(AddPontryaginDual G, ℝ)) :
-    IsGood μ (auxFun μ ψ) (tsupport ψ) :=
-  (exists_isGood μ ψ.hasCompactSupport.isCompact).choose_spec
+private theorem memLp_auxFun (ψ : C_c(AddPontryaginDual G, ℝ)) : MemLp (auxFun μ ψ) 2 μ :=
+  have h := (exists_hasCompactSupport_fourierIntegral_ne_zero μ
+    ψ.hasCompactSupport.isCompact).choose_spec
+  h.1.memLp_of_hasCompactSupport h.2.1
 
-private theorem integral_div_auxFun (ψ : C_c(AddPontryaginDual G, ℝ)) {f : G → ℂ}
-    (hf : IsGood μ f (tsupport ψ)) :
-    ∫ χ, ψ χ / ‖fourierIntegral μ (auxFun μ ψ) χ‖ ∂bochnerMeasure (auxFun μ ψ) =
-      ∫ χ, ψ χ / ‖fourierIntegral μ f χ‖ ∂bochnerMeasure f :=
-  (isGood_auxFun μ ψ).integral_div_eq hf (map_continuous ψ) ψ.hasCompactSupport subset_rfl
+omit [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)] in
+private theorem integrable_auxFun (ψ : C_c(AddPontryaginDual G, ℝ)) :
+    Integrable (auxFun μ ψ) μ :=
+  have h := (exists_hasCompactSupport_fourierIntegral_ne_zero μ
+    ψ.hasCompactSupport.isCompact).choose_spec
+  h.1.integrable_of_hasCompactSupport h.2.1
 
-/-- The positive linear functional `ψ ↦ ∫ χ, ψ χ / fourierIntegral μ f χ ∂bochnerMeasure f`, where
-`f` is any continuous, integrable and positive definite function whose Fourier transform is
-nonnegative and does not vanish on the support of `ψ`
-(see `AddPontryaginDual.dualHaarFunctional_apply`). -/
+omit [MeasurableSpace (AddPontryaginDual G)] [BorelSpace (AddPontryaginDual G)] in
+private theorem fourierIntegral_auxFun_ne_zero (ψ : C_c(AddPontryaginDual G, ℝ)) :
+    ∀ χ ∈ tsupport ψ, fourierIntegral μ (auxFun μ ψ) χ ≠ 0 :=
+  (exists_hasCompactSupport_fourierIntegral_ne_zero μ
+    ψ.hasCompactSupport.isCompact).choose_spec.2.2
+
+/-- The integral of `ψ` against the measure `(Ff)⁻¹ • μ_f` of Bourbaki, where `f = g * g⋆` and
+`g = auxFun μ ψ`. -/
+private noncomputable def dualHaarFun (ψ : C_c(AddPontryaginDual G, ℝ)) : ℝ :=
+  ∫ χ, ψ χ / ‖fourierIntegral μ (auxFun μ ψ) χ‖ ^ 2
+    ∂spectralMeasure μ ((memLp_auxFun μ ψ).toLp _)
+
+private theorem dualHaarFun_eq (ψ : C_c(AddPontryaginDual G, ℝ)) {g : G → ℂ}
+    (hg : Integrable g μ) (hg2 : MemLp g 2 μ)
+    (hgψ : ∀ χ ∈ tsupport ψ, fourierIntegral μ g χ ≠ 0) :
+    dualHaarFun μ ψ =
+      ∫ χ, ψ χ / ‖fourierIntegral μ g χ‖ ^ 2 ∂spectralMeasure μ (hg2.toLp g) :=
+  integral_div_sq_spectralMeasure_eq (integrable_auxFun μ ψ) (memLp_auxFun μ ψ) hg hg2
+    (map_continuous ψ) ψ.hasCompactSupport (fourierIntegral_auxFun_ne_zero μ ψ) hgψ
+
+private theorem dualHaarFun_add (ψ₁ ψ₂ : C_c(AddPontryaginDual G, ℝ)) :
+    dualHaarFun μ (ψ₁ + ψ₂) = dualHaarFun μ ψ₁ + dualHaarFun μ ψ₂ := by
+  -- By `dualHaarFun_eq`, applied to a function `g` whose Fourier transform does not vanish on
+  -- the union of the supports of `ψ₁` and `ψ₂`.
+  obtain ⟨g, hg, hgc, hg0⟩ := exists_hasCompactSupport_fourierIntegral_ne_zero μ
+    (ψ₁.hasCompactSupport.isCompact.union ψ₂.hasCompactSupport.isCompact)
+  have hgi : Integrable g μ := hg.integrable_of_hasCompactSupport hgc
+  have hg2 : MemLp g 2 μ := hg.memLp_of_hasCompactSupport hgc
+  have h₁ : ∀ χ ∈ tsupport ψ₁, fourierIntegral μ g χ ≠ 0 := fun χ hχ ↦ hg0 χ (.inl hχ)
+  have h₂ : ∀ χ ∈ tsupport ψ₂, fourierIntegral μ g χ ≠ 0 := fun χ hχ ↦ hg0 χ (.inr hχ)
+  rw [dualHaarFun_eq μ _ hgi hg2 fun χ hχ ↦ hg0 χ (tsupport_add ψ₁ ψ₂ hχ),
+    dualHaarFun_eq μ _ hgi hg2 h₁, dualHaarFun_eq μ _ hgi hg2 h₂,
+    ← integral_add
+      ((continuous_div_sq_norm_fourierIntegral hgi (map_continuous ψ₁)
+        h₁).integrable_of_hasCompactSupport (hasCompactSupport_div ψ₁.hasCompactSupport _))
+      ((continuous_div_sq_norm_fourierIntegral hgi (map_continuous ψ₂)
+        h₂).integrable_of_hasCompactSupport (hasCompactSupport_div ψ₂.hasCompactSupport _))]
+  simp only [CompactlySupportedContinuousMap.coe_add, Pi.add_apply, add_div]
+
+private theorem dualHaarFun_smul (c : ℝ) (ψ : C_c(AddPontryaginDual G, ℝ)) :
+    dualHaarFun μ (c • ψ) = c • dualHaarFun μ ψ := by
+  -- By `dualHaarFun_eq`, applied to `g = auxFun μ ψ`.
+  have hc : tsupport (c • ψ : C_c(AddPontryaginDual G, ℝ)) ⊆ tsupport ψ :=
+    closure_mono fun χ hχ h0 ↦ hχ (by simp [h0])
+  rw [dualHaarFun_eq μ _ (integrable_auxFun μ ψ) (memLp_auxFun μ ψ) fun χ hχ ↦
+    fourierIntegral_auxFun_ne_zero μ ψ χ (hc hχ), smul_eq_mul, dualHaarFun, ← integral_const_mul]
+  simp only [CompactlySupportedContinuousMap.coe_smul, Pi.smul_apply, smul_eq_mul, mul_div_assoc]
+
+/-- The positive linear functional
+`ψ ↦ ∫ χ, ψ χ / ‖fourierIntegral μ g χ‖ ^ 2 ∂spectralMeasure μ g`, where `g` is any function in
+`L¹ ∩ L²` whose Fourier transform does not vanish on the support of `ψ` (see
+`AddPontryaginDual.dualHaarFun_eq`). -/
 private noncomputable def dualHaarFunctional : C_c(AddPontryaginDual G, ℝ) →ₚ[ℝ] ℝ :=
   PositiveLinearMap.mk₀
-    { toFun := fun ψ ↦
-        ∫ χ, ψ χ / ‖fourierIntegral μ (auxFun μ ψ) χ‖ ∂bochnerMeasure (auxFun μ ψ)
-      map_add' := fun ψ₁ ψ₂ ↦ by
-        obtain ⟨f, hf⟩ := exists_isGood μ
-          (ψ₁.hasCompactSupport.isCompact.union ψ₂.hasCompactSupport.isCompact)
-        have h₁ : IsGood μ f (tsupport ψ₁) := hf.mono Set.subset_union_left
-        have h₂ : IsGood μ f (tsupport ψ₂) := hf.mono Set.subset_union_right
-        rw [integral_div_auxFun μ _ (hf.mono (tsupport_add ψ₁ ψ₂)), integral_div_auxFun μ _ h₁,
-          integral_div_auxFun μ _ h₂,
-          ← integral_add (h₁.integrable_div (map_continuous ψ₁) ψ₁.hasCompactSupport subset_rfl)
-            (h₂.integrable_div (map_continuous ψ₂) ψ₂.hasCompactSupport subset_rfl)]
-        simp only [CompactlySupportedContinuousMap.coe_add, Pi.add_apply, add_div]
-      map_smul' := fun c ψ ↦ by
-        have hc : tsupport (c • ψ : C_c(AddPontryaginDual G, ℝ)) ⊆ tsupport ψ :=
-          closure_mono fun χ hχ h0 ↦ hχ (by simp [h0])
-        rw [integral_div_auxFun μ _ ((isGood_auxFun μ ψ).mono hc), RingHom.id_apply, smul_eq_mul,
-          ← integral_const_mul]
-        simp only [CompactlySupportedContinuousMap.coe_smul, Pi.smul_apply, smul_eq_mul,
-          mul_div_assoc] }
-    fun ψ hψ ↦ integral_nonneg fun χ ↦ div_nonneg (hψ χ) (norm_nonneg _)
+    { toFun := dualHaarFun μ
+      map_add' := dualHaarFun_add μ
+      map_smul' := dualHaarFun_smul μ }
+    fun _ hψ ↦ integral_nonneg fun χ ↦ div_nonneg (hψ χ) (sq_nonneg _)
 
 /-- The Haar measure on the Pontryagin dual of `G` which is dual to the Haar measure `μ` on `G`:
-the unique regular Haar measure for which the Fourier inversion formula holds (see
-`AddPontryaginDual.fourierIntegralInv_fourierIntegral` and `AddPontryaginDual.eq_dualAddHaar`).
+the regular Haar measure for which the Fourier transform preserves the `L²` norm (see
+`AddPontryaginDual.eLpNorm_two_fourierIntegral`).
 
 It is the measure associated by the Riesz–Markov–Kakutani theorem with the positive linear
-functional `ψ ↦ ∫ χ, ψ χ / fourierIntegral μ f χ ∂bochnerMeasure f`, where `f` is any continuous,
-integrable and positive definite function whose Fourier transform is nonnegative and does not
-vanish on the support of `ψ`. -/
+functional `ψ ↦ ∫ χ, ψ χ / ‖fourierIntegral μ g χ‖ ^ 2 ∂spectralMeasure μ g`, where `g` is any
+function in `L¹ ∩ L²` whose Fourier transform does not vanish on the support of `ψ`. -/
 @[no_expose]
 noncomputable def _root_.MeasureTheory.Measure.dualAddHaar : Measure (AddPontryaginDual G) :=
   RealRMK.rieszMeasure (dualHaarFunctional μ)
@@ -433,183 +278,215 @@ instance : (μ.dualAddHaar).Regular :=
   RealRMK.regular_rieszMeasure _
 
 private theorem integral_dualAddHaar {ψ : AddPontryaginDual G → ℝ} (hψ : Continuous ψ)
-    (hψc : HasCompactSupport ψ) {f : G → ℂ} (hf : IsGood μ f (tsupport ψ)) :
-    ∫ χ, ψ χ ∂μ.dualAddHaar = ∫ χ, ψ χ / ‖fourierIntegral μ f χ‖ ∂bochnerMeasure f :=
+    (hψc : HasCompactSupport ψ) {g : G → ℂ} (hg : Integrable g μ) (hg2 : MemLp g 2 μ)
+    (hgψ : ∀ χ ∈ tsupport ψ, fourierIntegral μ g χ ≠ 0) :
+    ∫ χ, ψ χ ∂μ.dualAddHaar =
+      ∫ χ, ψ χ / ‖fourierIntegral μ g χ‖ ^ 2 ∂spectralMeasure μ (hg2.toLp g) :=
   (RealRMK.integral_rieszMeasure (dualHaarFunctional μ) ⟨⟨ψ, hψ⟩, hψc⟩).trans
-    (integral_div_auxFun μ ⟨⟨ψ, hψ⟩, hψc⟩ hf)
+    (dualHaarFun_eq μ ⟨⟨ψ, hψ⟩, hψc⟩ hg hg2 hgψ)
 
-/-- The measure `bochnerMeasure f` has density `fourierIntegral μ f` with respect to the dual Haar
-measure, in terms of integrals of continuous functions with compact support. -/
-private theorem integral_mul_clm_fourierIntegral {f : G → ℂ} (hf : Continuous f)
-    (hfi : Integrable f μ) (hfp : IsPositiveDefinite f) {ψ : AddPontryaginDual G → ℝ}
-    (hψ : Continuous ψ) (hψc : HasCompactSupport ψ) (ℓ : ℂ →L[ℝ] ℝ) :
-    ∫ χ, ψ χ * ℓ (fourierIntegral μ f χ) ∂μ.dualAddHaar =
-      ℓ (∫ χ, (ψ χ : ℂ) ∂bochnerMeasure f) := by
-  obtain ⟨g, hg⟩ := exists_isGood μ hψc.isCompact
-  have hfc : Continuous (fourierIntegral μ f) := continuous_fourierIntegral hfi
-  have hΨ : Continuous fun χ ↦ ((ψ χ / ‖fourierIntegral μ g χ‖ : ℝ) : ℂ) :=
-    Complex.continuous_ofReal.comp (hg.continuous_div hψ subset_rfl)
-  have hΨc : HasCompactSupport fun χ ↦ ((ψ χ / ‖fourierIntegral μ g χ‖ : ℝ) : ℂ) :=
-    (hasCompactSupport_div hψc _).comp_left Complex.ofReal_zero
-  calc ∫ χ, ψ χ * ℓ (fourierIntegral μ f χ) ∂μ.dualAddHaar
-    _ = ∫ χ, ψ χ * ℓ (fourierIntegral μ f χ) / ‖fourierIntegral μ g χ‖ ∂bochnerMeasure g :=
-      integral_dualAddHaar μ (hψ.mul (ℓ.continuous.comp hfc)) hψc.mul_right
-        (hg.mono tsupport_mul_subset_left)
-    _ = ∫ χ, ℓ (((ψ χ / ‖fourierIntegral μ g χ‖ : ℝ) : ℂ) * fourierIntegral μ f χ)
-          ∂bochnerMeasure g := by
+/-- The spectral measure of `f ∈ L¹ ∩ L²` has density `‖fourierIntegral μ f‖ ^ 2` with respect to
+the dual Haar measure. -/
+theorem withDensity_dualAddHaar_sq_enorm_fourierIntegral {f : G → ℂ} (hf : Integrable f μ)
+    (hf2 : MemLp f 2 μ) :
+    μ.dualAddHaar.withDensity (fun χ ↦ ‖fourierIntegral μ f χ‖ₑ ^ 2) =
+      spectralMeasure μ (hf2.toLp f) := by
+  -- TS II §1 n°3, (16): `μ_f = Ff • ν`. By `Measure.withDensity_eq_of_forall_integral_mul_eq`, it
+  -- suffices to prove that `∫ χ, ψ χ * ‖Ff χ‖ ^ 2 ∂μ.dualAddHaar = ∫ χ, ψ χ ∂spectralMeasure μ f`
+  -- for `ψ` continuous with compact support. This follows from `integral_dualAddHaar` and
+  -- `integral_mul_sq_fourierIntegral_spectralMeasure_comm`.
+  have hfc : Continuous (fourierIntegral μ f) := continuous_fourierIntegral hf
+  simp_rw [enorm_eq_nnnorm, ← ENNReal.coe_pow]
+  refine Measure.withDensity_eq_of_forall_integral_mul_eq
+    (ρ := fun χ ↦ ‖fourierIntegral μ f χ‖₊ ^ 2) (hfc.nnnorm.pow 2)
+    (C := (∫ x, ‖f x‖ ∂μ).toNNReal ^ 2) (fun χ ↦ ?_) fun ψ ↦ ?_
+  · have h : ‖fourierIntegral μ f χ‖₊ ≤ (∫ x, ‖f x‖ ∂μ).toNNReal :=
+      (Real.le_toNNReal_iff_coe_le (integral_nonneg fun _ ↦ norm_nonneg _)).2
+        (norm_fourierIntegral_le_integral_norm μ f χ)
+    exact pow_le_pow_left₀ zero_le h 2
+  obtain ⟨g, hg, hgc, hg0⟩ :=
+    exists_hasCompactSupport_fourierIntegral_ne_zero μ ψ.hasCompactSupport.isCompact
+  have hgi : Integrable g μ := hg.integrable_of_hasCompactSupport hgc
+  have hg2 : MemLp g 2 μ := hg.memLp_of_hasCompactSupport hgc
+  have hΨ : Continuous fun χ ↦ ((ψ χ / ‖fourierIntegral μ g χ‖ ^ 2 : ℝ) : ℂ) :=
+    Complex.continuous_ofReal.comp
+      (continuous_div_sq_norm_fourierIntegral hgi (map_continuous ψ) hg0)
+  have hΨc : HasCompactSupport fun χ ↦ ((ψ χ / ‖fourierIntegral μ g χ‖ ^ 2 : ℝ) : ℂ) :=
+    (hasCompactSupport_div ψ.hasCompactSupport _).comp_left Complex.ofReal_zero
+  refine Complex.ofReal_injective ?_
+  calc ((∫ χ, ψ χ * ((‖fourierIntegral μ f χ‖₊ ^ 2 : ℝ≥0) : ℝ) ∂μ.dualAddHaar : ℝ) : ℂ)
+    _ = ((∫ χ, ψ χ * ‖fourierIntegral μ f χ‖ ^ 2 / ‖fourierIntegral μ g χ‖ ^ 2
+          ∂spectralMeasure μ (hg2.toLp g) : ℝ) : ℂ) := by
+      rw [← integral_dualAddHaar μ (ψ := fun χ ↦ ψ χ * ‖fourierIntegral μ f χ‖ ^ 2)
+        ((map_continuous ψ).mul (hfc.norm.pow 2)) ψ.hasCompactSupport.mul_right hgi hg2
+        fun χ hχ ↦ hg0 χ (tsupport_mul_subset_left hχ)]
+      simp
+    _ = ∫ χ, ((ψ χ / ‖fourierIntegral μ g χ‖ ^ 2 : ℝ) : ℂ) * ‖fourierIntegral μ f χ‖ ^ 2
+          ∂spectralMeasure μ (hg2.toLp g) := by
+      rw [← integral_complex_ofReal]
       refine integral_congr_ae (.of_forall fun χ ↦ ?_)
-      beta_reduce
-      rw [← Complex.real_smul, map_smul, smul_eq_mul, mul_div_right_comm]
-    _ = ℓ (∫ χ, ((ψ χ / ‖fourierIntegral μ g χ‖ : ℝ) : ℂ) * fourierIntegral μ f χ
-          ∂bochnerMeasure g) :=
-      ℓ.integral_comp_comm ((hΨ.mul hfc).integrable_of_hasCompactSupport hΨc.mul_right)
-    _ = ℓ (∫ χ, ((ψ χ / ‖fourierIntegral μ g χ‖ : ℝ) : ℂ) * fourierIntegral μ g χ
-          ∂bochnerMeasure f) := by
-      rw [integral_mul_fourierIntegral_bochnerMeasure_comm μ hf hfi hfp hg.continuous
-        hg.integrable hg.isPositiveDefinite hΨ hΨc]
-    _ = ℓ (∫ χ, (ψ χ : ℂ) ∂bochnerMeasure f) := by simp_rw [hg.ofReal_div_mul subset_rfl]
+      push_cast
+      ring
+    _ = ∫ χ, ((ψ χ / ‖fourierIntegral μ g χ‖ ^ 2 : ℝ) : ℂ) * ‖fourierIntegral μ g χ‖ ^ 2
+          ∂spectralMeasure μ (hf2.toLp f) :=
+      integral_mul_sq_fourierIntegral_spectralMeasure_comm μ hf hf2 hgi hg2
+        ⟨⟨_, hΨ⟩, hΨc.is_zero_at_infty⟩
+    _ = ((∫ χ, ψ χ ∂spectralMeasure μ (hf2.toLp f) : ℝ) : ℂ) := by
+      rw [← integral_complex_ofReal]
+      exact integral_congr_ae (.of_forall fun χ ↦ ofReal_div_sq_mul_sq hg0 χ)
 
-private theorem integral_mul_re_fourierIntegral {f : G → ℂ} (hf : Continuous f)
-    (hfi : Integrable f μ) (hfp : IsPositiveDefinite f) {ψ : AddPontryaginDual G → ℝ}
-    (hψ : Continuous ψ) (hψc : HasCompactSupport ψ) :
-    ∫ χ, ψ χ * (fourierIntegral μ f χ).re ∂μ.dualAddHaar = ∫ χ, ψ χ ∂bochnerMeasure f := by
-  simpa [integral_complex_ofReal] using
-    integral_mul_clm_fourierIntegral μ hf hfi hfp hψ hψc Complex.reCLM
+/-- The Fourier transform preserves the `L²` norm of functions in `L¹ ∩ L²`. -/
+theorem eLpNorm_two_fourierIntegral {f : G → ℂ} (hf : Integrable f μ) (hf2 : MemLp f 2 μ) :
+    eLpNorm (fourierIntegral μ f) 2 μ.dualAddHaar = eLpNorm f 2 μ := by
+  -- TS II §1 n°3, (19). Bourbaki proves this for `f ∈ A(G)` and extends it by density.
+  have hsq : eLpNorm (fourierIntegral μ f) 2 μ.dualAddHaar ^ 2 = eLpNorm f 2 μ ^ 2 := by
+    rw [sq_eLpNorm_two (continuous_fourierIntegral hf).aestronglyMeasurable, ← setLIntegral_univ,
+      ← withDensity_apply _ MeasurableSet.univ,
+      withDensity_dualAddHaar_sq_enorm_fourierIntegral μ hf hf2, spectralMeasure_univ,
+      enorm_eq_nnnorm, Lp.nnnorm_toLp, ENNReal.coe_toNNReal hf2.eLpNorm_lt_top.ne]
+  exact le_antisymm ((ENNReal.pow_le_pow_left_iff two_ne_zero).1 hsq.le)
+    ((ENNReal.pow_le_pow_left_iff two_ne_zero).1 hsq.ge)
 
-private theorem integral_mul_im_fourierIntegral {f : G → ℂ} (hf : Continuous f)
-    (hfi : Integrable f μ) (hfp : IsPositiveDefinite f) {ψ : AddPontryaginDual G → ℝ}
-    (hψ : Continuous ψ) (hψc : HasCompactSupport ψ) :
-    ∫ χ, ψ χ * (fourierIntegral μ f χ).im ∂μ.dualAddHaar = 0 := by
-  simpa [integral_complex_ofReal] using
-    integral_mul_clm_fourierIntegral μ hf hfi hfp hψ hψc Complex.imCLM
+/-! ### Invariance under translations -/
+
+section Translation
+
+variable {μ} {g : G → ℂ} (η : AddPontryaginDual G)
+
+omit [IsTopologicalAddGroup G] [LocallyCompactSpace G] [MeasurableSpace (AddPontryaginDual G)]
+  [BorelSpace (AddPontryaginDual G)] [μ.IsAddHaarMeasure] [μ.Regular] in
+private theorem integrable_toAddChar_smul (hg : Integrable g μ) :
+    Integrable (fun x ↦ η.toAddChar x • g x) μ :=
+  hg.mono (η.continuous_toAddChar.aestronglyMeasurable.fun_smul hg.1)
+    (.of_forall fun x ↦ by rw [Circle.norm_smul])
+
+omit [IsTopologicalAddGroup G] [LocallyCompactSpace G] [MeasurableSpace (AddPontryaginDual G)]
+  [BorelSpace (AddPontryaginDual G)] [μ.IsAddHaarMeasure] [μ.Regular] in
+private theorem memLp_toAddChar_smul (hg2 : MemLp g 2 μ) :
+    MemLp (fun x ↦ η.toAddChar x • g x) 2 μ :=
+  MemLp.of_le hg2
+    (η.continuous_toAddChar.aestronglyMeasurable.fun_smul (MemLp.aestronglyMeasurable hg2))
+    (.of_forall fun x ↦ by rw [Circle.norm_smul])
+
+omit [LocallyCompactSpace G] [MeasurableSpace (AddPontryaginDual G)]
+  [BorelSpace (AddPontryaginDual G)] [μ.Regular] in
+private theorem inner_toLp_vadd_toLp (hg2 : MemLp g 2 μ) (y : G) :
+    inner ℂ (hg2.toLp g) (DomAddAct.mk y +ᵥ hg2.toLp g) = ∫ x, conj (g x) * g (y + x) ∂μ := by
+  rw [L2.inner_def]
+  refine integral_congr_ae ?_
+  filter_upwards [hg2.coeFn_toLp, DomAddAct.vadd_Lp_ae_eq (DomAddAct.mk y) (hg2.toLp g),
+    (measurePreserving_add_left μ y).quasiMeasurePreserving.tendsto_ae.eventually
+      hg2.coeFn_toLp] with x hx hx' hx''
+  rw [hx, hx', Equiv.symm_apply_apply, vadd_eq_add, hx'', RCLike.inner_apply, mul_comm]
+
+omit [LocallyCompactSpace G] [MeasurableSpace (AddPontryaginDual G)]
+  [BorelSpace (AddPontryaginDual G)] [μ.Regular] in
+/-- Multiplication by a character is a unitary operator on `L²(G)` which commutes with
+translations up to a scalar. -/
+private theorem inner_toLp_vadd_toAddChar_smul (hg2 : MemLp g 2 μ) (y : G) :
+    inner ℂ ((memLp_toAddChar_smul η hg2).toLp _)
+        (DomAddAct.mk y +ᵥ (memLp_toAddChar_smul η hg2).toLp _) =
+      η.toAddChar y • inner ℂ (hg2.toLp g) (DomAddAct.mk y +ᵥ hg2.toLp g) := by
+  rw [inner_toLp_vadd_toLp, inner_toLp_vadd_toLp, Circle.smul_def, smul_eq_mul,
+    ← integral_const_mul]
+  refine integral_congr_ae (.of_forall fun x ↦ ?_)
+  have h1 : conj (η.toAddChar x : ℂ) * η.toAddChar x = 1 := by
+    rw [Complex.conj_mul', Circle.norm_coe]
+    simp
+  simp only [Circle.smul_def, smul_eq_mul, map_mul, AddChar.map_add_eq_mul, Circle.coe_mul]
+  linear_combination (η.toAddChar y * conj (g x) * g (y + x)) * h1
+
+omit [IsTopologicalAddGroup G] [LocallyCompactSpace G] [MeasurableSpace G] [BorelSpace G] in
+private theorem continuous_integral_zeroAtInfty (ν : Measure (AddPontryaginDual G))
+    [IsFiniteMeasure ν] : Continuous fun Φ : C₀(AddPontryaginDual G, ℂ) ↦ ∫ χ, Φ χ ∂ν := by
+  simpa using ZeroAtInftyContinuousMap.continuous_integral_mul (ν := ν) (integrable_const (1 : ℂ))
+
+/-- Multiplying `g` by a character `η` translates the spectral measure of `g` by `η`. -/
+private theorem spectralMeasure_toAddChar_smul (hg2 : MemLp g 2 μ) :
+    spectralMeasure μ ((memLp_toAddChar_smul η hg2).toLp _) =
+      Measure.map (η + ·) (spectralMeasure μ (hg2.toLp g)) := by
+  -- For `φ ∈ L¹(G)`, the integrals of `fourierL1 μ φ` against both measures are equal to
+  -- `∫ y, φ y * η (-y) * ⟪g, g (-y + ·)⟫ ∂μ`. Conclude by `denseRange_fourierL1`.
+  have : (Measure.map (η + ·) (spectralMeasure μ (hg2.toLp g))).Regular :=
+    Regular.map (Homeomorph.addLeft η)
+  have : IsFiniteMeasure (Measure.map (η + ·) (spectralMeasure μ (hg2.toLp g))) :=
+    isFiniteMeasure_map _ _
+  have key (Φ : C₀(AddPontryaginDual G, ℂ)) :
+      ∫ χ, Φ χ ∂spectralMeasure μ ((memLp_toAddChar_smul η hg2).toLp _) =
+        ∫ χ, Φ χ ∂Measure.map (η + ·) (spectralMeasure μ (hg2.toLp g)) := by
+    refine (denseRange_fourierL1 μ).induction_on Φ (isClosed_eq
+      (continuous_integral_zeroAtInfty _) (continuous_integral_zeroAtInfty _)) fun φ ↦ ?_
+    have hφ' : Integrable (fun x ↦ (-η).toAddChar x • φ x) μ :=
+      integrable_toAddChar_smul (-η) (L1.integrable_coeFn φ)
+    have e (χ : AddPontryaginDual G) : fourierL1 μ φ (η + χ) = fourierL1 μ (hφ'.toL1 _) χ := by
+      rw [fourierL1_apply, fourierL1_apply, fourierIntegral_congr_ae hφ'.coeFn_toL1,
+        fourierIntegral_toAddChar_smul, sub_neg_eq_add, add_comm]
+    rw [(measurableEmbedding_addLeft η).integral_map]
+    simp_rw [e]
+    rw [integral_spectralMeasure, integral_spectralMeasure, fourierMultiplier_fourierL1,
+      fourierMultiplier_fourierL1, L1.regularRep_apply, L1.regularRep_apply, L1.inner_convL2,
+      L1.inner_convL2]
+    refine integral_congr_ae ?_
+    filter_upwards [hφ'.coeFn_toL1] with y hy
+    rw [hy, inner_toLp_vadd_toAddChar_smul η hg2]
+    simp only [toAddChar_neg_apply, AddChar.map_neg_eq_inv, Circle.smul_def, smul_eq_mul]
+    ring
+  refine Measure.ext_of_integral_eq_on_compactlySupported fun ψ ↦ ?_
+  have h := key ⟨⟨fun χ ↦ (ψ χ : ℂ), Complex.continuous_ofReal.comp (map_continuous ψ)⟩,
+    (ψ.hasCompactSupport.comp_left Complex.ofReal_zero).is_zero_at_infty⟩
+  simp only [ZeroAtInftyContinuousMap.coe_mk, integral_complex_ofReal] at h
+  exact_mod_cast h
+
+end Translation
 
 private theorem map_add_left_dualAddHaar (η : AddPontryaginDual G) :
     Measure.map (η + ·) μ.dualAddHaar = μ.dualAddHaar := by
   -- Multiplying `g` by the character `-η` translates both `fourierIntegral μ g` and
-  -- `bochnerMeasure g` by `η`.
+  -- `spectralMeasure μ g` by `-η`.
   have : (Measure.map (η + ·) μ.dualAddHaar).Regular := Regular.map (Homeomorph.addLeft η)
   refine Measure.ext_of_integral_eq_on_compactlySupported fun ψ ↦ ?_
   rw [(measurableEmbedding_addLeft η).integral_map]
-  obtain ⟨g, hg⟩ := exists_isGood μ ψ.hasCompactSupport.isCompact
+  obtain ⟨g, hg, hgc, hg0⟩ :=
+    exists_hasCompactSupport_fourierIntegral_ne_zero μ ψ.hasCompactSupport.isCompact
+  have hgi : Integrable g μ := hg.integrable_of_hasCompactSupport hgc
+  have hg2 : MemLp g 2 μ := hg.memLp_of_hasCompactSupport hgc
   have hψ' : Continuous fun χ ↦ ψ (η + χ) :=
     (map_continuous ψ).comp (continuous_const.add continuous_id)
   have hψ'c : HasCompactSupport fun χ ↦ ψ (η + χ) :=
     ψ.hasCompactSupport.comp_homeomorph (Homeomorph.addLeft η)
-  have hg' : IsGood μ (fun x ↦ (-η).toAddChar x • g x) (tsupport fun χ ↦ ψ (η + χ)) := by
-    refine (hg.toAddChar_smul (-η)).mono fun χ hχ ↦ ?_
+  have hg' : ∀ χ ∈ tsupport fun χ ↦ ψ (η + χ),
+      fourierIntegral μ (fun x ↦ (-η).toAddChar x • g x) χ ≠ 0 := by
+    intro χ hχ
     rw [show (fun χ ↦ ψ (η + χ)) = ψ ∘ Homeomorph.addLeft η from rfl,
       tsupport_comp_eq_preimage] at hχ
-    change χ - -η ∈ tsupport ψ
-    rwa [sub_neg_eq_add, add_comm]
-  rw [integral_dualAddHaar μ hψ' hψ'c hg',
-    integral_dualAddHaar μ (map_continuous ψ) ψ.hasCompactSupport hg,
-    bochnerMeasure_toAddChar_smul hg.isPositiveDefinite hg.continuous,
-    (measurableEmbedding_addLeft (-η)).integral_map]
+    rw [fourierIntegral_toAddChar_smul, sub_neg_eq_add, add_comm]
+    exact hg0 _ hχ
+  rw [integral_dualAddHaar μ hψ' hψ'c (integrable_toAddChar_smul (-η) hgi)
+      (memLp_toAddChar_smul (-η) hg2) hg',
+    integral_dualAddHaar μ (map_continuous ψ) ψ.hasCompactSupport hgi hg2 hg0,
+    spectralMeasure_toAddChar_smul (-η) hg2, (measurableEmbedding_addLeft (-η)).integral_map]
   refine integral_congr_ae (.of_forall fun χ ↦ ?_)
   simp only [fourierIntegral_toAddChar_smul, add_neg_cancel_left, sub_neg_eq_add,
     neg_add_cancel_comm]
 
 private theorem dualAddHaar_ne_zero : μ.dualAddHaar ≠ 0 := by
-  -- Otherwise `bochnerMeasure φ = 0` for all `φ`, hence `φ 0 = 0`.
+  -- By `eLpNorm_two_fourierIntegral`, applied to a nonzero continuous function with compact
+  -- support.
   intro h
-  obtain ⟨φ, hφ, hφc, hφp, -, hφ0⟩ :=
-    exists_isPositiveDefinite_hasCompactSupport (G := G) (U := Set.univ) Filter.univ_mem
-  have h0 : bochnerMeasure φ = 0 := by
-    refine Measure.ext_of_integral_eq_on_compactlySupported fun ψ ↦ ?_
-    rw [← integral_mul_re_fourierIntegral μ hφ (hφ.integrable_of_hasCompactSupport hφc) hφp
-      (map_continuous ψ) ψ.hasCompactSupport, h]
-    simp
-  have := integral_toAddChar_bochnerMeasure hφp hφ 0
-  rw [h0] at this
-  exact hφ0 (by simpa using this.symm)
+  obtain ⟨θ, hθ1, -, hθc, -⟩ := exists_continuous_one_zero_of_isCompact
+    (isCompact_singleton (x := (0 : G))) isClosed_empty (Set.disjoint_empty _)
+  have hg : Continuous fun x ↦ (θ x : ℂ) := Complex.continuous_ofReal.comp θ.continuous
+  have hgc : HasCompactSupport fun x ↦ (θ x : ℂ) := hθc.comp_left Complex.ofReal_zero
+  have h2 := eLpNorm_two_fourierIntegral μ (hg.integrable_of_hasCompactSupport hgc)
+    (hg.memLp_of_hasCompactSupport hgc)
+  rw [h, eLpNorm_measure_zero] at h2
+  have h3 := congr_fun ((hg.ae_eq_iff_eq μ continuous_zero).1
+    ((eLpNorm_eq_zero_iff two_ne_zero).1 h2.symm)) 0
+  simp [hθ1 (Set.mem_singleton 0)] at h3
 
 instance : (μ.dualAddHaar).IsAddHaarMeasure :=
   have : (μ.dualAddHaar).IsAddLeftInvariant := ⟨map_add_left_dualAddHaar μ⟩
   have : NeZero μ.dualAddHaar := ⟨dualAddHaar_ne_zero μ⟩
   {}
-
-variable {μ} {f : G → ℂ}
-
-/-- The Fourier transform of a continuous, integrable and positive definite function is
-nonnegative. -/
-theorem fourierIntegral_nonneg (hf : Continuous f) (hfi : Integrable f μ)
-    (hfp : IsPositiveDefinite f) (χ : AddPontryaginDual G) : 0 ≤ fourierIntegral μ f χ := by
-  -- The measure `bochnerMeasure f` has density `fourierIntegral μ f` with respect to
-  -- `μ.dualAddHaar`, which is positive on nonempty open sets.
-  have hfc : Continuous (fourierIntegral μ f) := continuous_fourierIntegral hfi
-  have hre := nonneg_of_forall_integral_mul_nonneg (ν := μ.dualAddHaar)
-    (s := fun χ ↦ (fourierIntegral μ f χ).re) (Complex.continuous_re.comp hfc)
-    (fun ψ hψ hψc hψ0 ↦ by
-      rw [integral_mul_re_fourierIntegral μ hf hfi hfp hψ hψc]
-      exact integral_nonneg hψ0) χ
-  have him := nonneg_of_forall_integral_mul_nonneg (ν := μ.dualAddHaar)
-    (s := fun χ ↦ (fourierIntegral μ f χ).im) (Complex.continuous_im.comp hfc)
-    (fun ψ hψ hψc _ ↦ (integral_mul_im_fourierIntegral μ hf hfi hfp hψ hψc).ge) χ
-  have him' := nonneg_of_forall_integral_mul_nonneg (ν := μ.dualAddHaar)
-    (s := fun χ ↦ -(fourierIntegral μ f χ).im) (Complex.continuous_im.comp hfc).neg
-    (fun ψ hψ hψc _ ↦ by
-      simp [mul_neg, integral_neg, integral_mul_im_fourierIntegral μ hf hfi hfp hψ hψc]) χ
-  exact Complex.nonneg_iff.2 ⟨hre, le_antisymm him (neg_nonneg.1 him')⟩
-
-/-- The measure associated by Bochner's theorem with a continuous, integrable and positive
-definite function `f` has density `fourierIntegral μ f` with respect to the dual Haar measure. -/
-theorem withDensity_dualAddHaar_enorm_fourierIntegral (hf : Continuous f) (hfi : Integrable f μ)
-    (hfp : IsPositiveDefinite f) :
-    μ.dualAddHaar.withDensity (fun χ ↦ ‖fourierIntegral μ f χ‖ₑ) = bochnerMeasure f := by
-  simp_rw [enorm_eq_nnnorm]
-  refine Measure.withDensity_eq_of_forall_integral_mul_eq
-    (ρ := fun χ ↦ ‖fourierIntegral μ f χ‖₊) (continuous_fourierIntegral hfi).nnnorm
-    (C := (∫ x, ‖f x‖ ∂μ).toNNReal) (fun χ ↦ ?_) fun ψ ↦ ?_
-  · exact (Real.le_toNNReal_iff_coe_le (integral_nonneg fun _ ↦ norm_nonneg _)).2
-      (norm_fourierIntegral_le_integral_norm μ f χ)
-  · rw [← integral_mul_re_fourierIntegral μ hf hfi hfp (map_continuous ψ) ψ.hasCompactSupport]
-    refine integral_congr_ae (.of_forall fun χ ↦ ?_)
-    beta_reduce
-    rw [coe_nnnorm, Complex.re_eq_norm.2 (fourierIntegral_nonneg hf hfi hfp χ)]
-
-/-- The Fourier transform of a continuous, integrable and positive definite function is
-integrable with respect to the dual Haar measure. -/
-theorem integrable_fourierIntegral (hf : Continuous f) (hfi : Integrable f μ)
-    (hfp : IsPositiveDefinite f) : Integrable (fourierIntegral μ f) μ.dualAddHaar := by
-  -- `∫⁻ χ, ‖fourierIntegral μ f χ‖ₑ ∂μ.dualAddHaar = bochnerMeasure f univ < ∞`.
-  refine ⟨(continuous_fourierIntegral hfi).aestronglyMeasurable, ?_⟩
-  rw [hasFiniteIntegral_iff_enorm, ← setLIntegral_univ, ← withDensity_apply _ MeasurableSet.univ,
-    withDensity_dualAddHaar_enorm_fourierIntegral hf hfi hfp]
-  exact measure_lt_top _ _
-
-/-- The **Fourier inversion theorem** for continuous, integrable and positive definite
-functions. -/
-theorem fourierIntegralInv_fourierIntegral (hf : Continuous f) (hfi : Integrable f μ)
-    (hfp : IsPositiveDefinite f) :
-    fourierIntegralInv μ.dualAddHaar (fourierIntegral μ f) = f := by
-  -- `integral_toAddChar_bochnerMeasure`, `withDensity_dualAddHaar_enorm_fourierIntegral` and
-  -- `fourierIntegral_nonneg`.
-  ext x
-  rw [fourierIntegralInv_apply, ← integral_toAddChar_bochnerMeasure hfp hf x,
-    ← withDensity_dualAddHaar_enorm_fourierIntegral hf hfi hfp,
-    integral_withDensity_eq_integral_toReal_smul
-      (continuous_fourierIntegral hfi).enorm.measurable (.of_forall fun _ ↦ enorm_lt_top)]
-  refine integral_congr_ae (.of_forall fun χ ↦ ?_)
-  beta_reduce
-  rw [toReal_enorm, Complex.real_smul, ← Complex.eq_coe_norm_of_nonneg
-    (fourierIntegral_nonneg hf hfi hfp χ), Circle.smul_def, smul_eq_mul, mul_comm]
-
-/-- The dual Haar measure is the only regular Haar measure for which the Fourier inversion
-formula holds at `0`. -/
-theorem eq_dualAddHaar {ν : Measure (AddPontryaginDual G)} [ν.IsAddHaarMeasure] [ν.Regular]
-    (h : ∀ f : G → ℂ, Continuous f → Integrable f μ → IsPositiveDefinite f →
-      fourierIntegralInv ν (fourierIntegral μ f) 0 = f 0) : ν = μ.dualAddHaar := by
-  -- `ν = c • μ.dualAddHaar` by uniqueness of the Haar measure, and `c = 1` by applying the
-  -- assumption to a function `f` with `f 0 ≠ 0` (`exists_isPositiveDefinite_hasCompactSupport`).
-  obtain ⟨c, rfl⟩ : ∃ c : ℝ≥0, ν = c • μ.dualAddHaar :=
-    ⟨_, isAddLeftInvariant_eq_smul_of_regular ν μ.dualAddHaar⟩
-  obtain ⟨f, hf, hfc, hfp, -, hf0⟩ :=
-    exists_isPositiveDefinite_hasCompactSupport (G := G) (U := Set.univ) Filter.univ_mem
-  have hfi : Integrable f μ := hf.integrable_of_hasCompactSupport hfc
-  have h1 := h f hf hfi hfp
-  rw [fourierIntegralInv_apply, integral_smul_nnreal_measure, ← fourierIntegralInv_apply,
-    fourierIntegralInv_fourierIntegral hf hfi hfp, NNReal.smul_def, Complex.real_smul,
-    mul_eq_right₀ hf0] at h1
-  rw [show c = 1 by exact_mod_cast h1, one_smul]
 
 end AddPontryaginDual

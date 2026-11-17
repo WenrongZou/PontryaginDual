@@ -36,8 +36,6 @@ finite regular measure on the Pontryagin dual of `G`, and that `ν` is unique.
 * `AddPontryaginDual.measure_ext_of_integral_toAddChar`: a finite regular measure `ν` on the
   Pontryagin dual is determined by the function `x ↦ ∫ χ, χ x ∂ν` (uniqueness in Bochner's
   theorem).
-* `AddPontryaginDual.ae_eq_zero_of_fourierIntegralInv_eq_zero`: the inverse Fourier transform is
-  injective on `L¹` of the Pontryagin dual.
 
 ## Implementation notes
 
@@ -352,25 +350,6 @@ theorem measure_ext_of_integral_toAddChar {ν₁ ν₂ : Measure (AddPontryaginD
   have := h2 ⟨⟨fun χ ↦ (g χ : ℂ), Complex.continuous_ofReal.comp g.continuous⟩,
     (g.hasCompactSupport.comp_left Complex.ofReal_zero).is_zero_at_infty⟩
   simpa [integral_complex_ofReal] using this
-
-/-- The inverse Fourier transform is injective on `L¹` of the Pontryagin dual. -/
-theorem ae_eq_zero_of_fourierIntegralInv_eq_zero {ν : Measure (AddPontryaginDual G)} [ν.Regular]
-    {F : AddPontryaginDual G → ℂ} (hF : Integrable F ν) (h : fourierIntegralInv ν F = 0) :
-    F =ᵐ[ν] 0 := by
-  -- By the multiplication formula, `∫ χ, Φ χ * F χ ∂ν = 0` for all `Φ` in the range of
-  -- `fourierL1 μ`, hence for all continuous functions `Φ` vanishing at infinity.
-  borelize G
-  let μ : Measure G := Measure.addHaar
-  have h1 (f : Lp ℂ 1 μ) : ∫ χ, fourierL1 μ f χ * F χ ∂ν = 0 := by
-    have := integral_fourierIntegral_mul (ν := ν) (L1.integrable_coeFn f) hF
-    rw [h] at this
-    simpa using this
-  have h2 (Φ : C₀(AddPontryaginDual G, ℂ)) : ∫ χ, Φ χ * F χ ∂ν = 0 :=
-    (denseRange_fourierL1 μ).induction_on Φ
-      (isClosed_eq (ZeroAtInftyContinuousMap.continuous_integral_mul hF) continuous_const) h1
-  refine hF.ae_eq_zero_of_forall_integral_smul_eq_zero fun g hg hgc ↦ ?_
-  simpa using h2 ⟨⟨fun χ ↦ (g χ : ℂ), Complex.continuous_ofReal.comp hg⟩,
-    (hgc.comp_left Complex.ofReal_zero).is_zero_at_infty⟩
 
 end FourierStieltjes
 
