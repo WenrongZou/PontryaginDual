@@ -5,6 +5,7 @@ public import PontryaginDuality.Convolution.L2
 public import PontryaginDuality.Duality.Basic
 public import PontryaginDuality.Duality.DoubleDual
 public import PontryaginDuality.Duality.Multiplicative
+public import PontryaginDuality.Duality.Pairing
 public import PontryaginDuality.Fourier.AddChar
 public import PontryaginDuality.Fourier.Basic
 public import PontryaginDuality.Fourier.CStar

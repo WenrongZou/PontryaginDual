@@ -155,15 +155,8 @@ theorem isEmbedding_doubleDualEmb : IsEmbedding (doubleDualEmb G) :=
 
 /-- The range of the canonical map from a locally compact Hausdorff abelian group to its double
 dual is closed. -/
-theorem isClosed_range_doubleDualEmb : IsClosed (Set.range (doubleDualEmb G)) := by
-  -- The range is an additive subgroup of the double dual. It is homeomorphic to `G` by
-  -- `isEmbedding_doubleDualEmb`, hence locally compact. Apply
-  -- `AddSubgroup.isClosed_of_locallyCompactSpace`.
-  let H : AddSubgroup (AddPontryaginDual (AddPontryaginDual G)) :=
-    (doubleDualEmb G).toAddMonoidHom.range
-  have : LocallyCompactSpace H :=
-    (isEmbedding_doubleDualEmb G).toHomeomorph.symm.isClosedEmbedding.locallyCompactSpace
-  exact AddSubgroup.isClosed_of_locallyCompactSpace (H := H)
+theorem isClosed_range_doubleDualEmb : IsClosed (Set.range (doubleDualEmb G)) :=
+  (doubleDualEmb G).toAddMonoidHom.isClosed_range_of_isEmbedding (isEmbedding_doubleDualEmb G)
 
 /-- The canonical map from a locally compact Hausdorff abelian group to its double dual is
 surjective. -/

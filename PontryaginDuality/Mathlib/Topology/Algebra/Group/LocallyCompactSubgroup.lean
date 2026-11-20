@@ -40,3 +40,14 @@ instance Subgroup.isClosed_of_locallyCompactSpace {G : Type*} [Group G] [Topolog
     exact x.2
   · intro x hx
     exact ⟨⟨x, hx.2⟩, hUK (interior_subset (s := U) hx.1), rfl⟩
+
+/-- The range of a topological embedding of a locally compact group into a Hausdorff topological
+group is closed. -/
+@[to_additive
+/-- The range of a topological embedding of a locally compact additive group into a Hausdorff
+topological additive group is closed. -/]
+theorem MonoidHom.isClosed_range_of_isEmbedding {G H : Type*} [Group G] [TopologicalSpace G]
+    [LocallyCompactSpace G] [Group H] [TopologicalSpace H] [IsTopologicalGroup H] [T2Space H]
+    {f : G →* H} (hf : Topology.IsEmbedding f) : IsClosed (Set.range f) :=
+  have : LocallyCompactSpace f.range := hf.toHomeomorph.symm.isClosedEmbedding.locallyCompactSpace
+  Subgroup.isClosed_of_locallyCompactSpace (H := f.range)
